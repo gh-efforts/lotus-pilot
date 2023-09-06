@@ -19,3 +19,9 @@
 
 # Go workspace file
 go.work
+
+config_test.json
+.DS_Store
+.vscode
+.idea
+lotus-pilot
