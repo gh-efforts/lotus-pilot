@@ -17,6 +17,7 @@ import (
 	cliutil "github.com/filecoin-project/lotus/cli/util"
 	"github.com/gh-efforts/lotus-pilot/config"
 	"github.com/gh-efforts/lotus-pilot/metrics"
+	"github.com/gh-efforts/lotus-pilot/miner"
 )
 
 var (
@@ -71,7 +72,6 @@ var runCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		_ = conf
 
 		exporter, err := prometheus.NewExporter(prometheus.Options{
 			Namespace: "lotuspilot",
@@ -91,20 +91,25 @@ var runCmd = &cli.Command{
 		}
 		stats.Record(ctx, metrics.Info.M(1))
 
-		listen := cctx.String("listen")
-		log.Infow("pilot server", "listen", listen)
-
-		h, err := PilotHandler(exporter)
+		miner, err := miner.NewMiner(ctx, conf)
 		if err != nil {
 			return err
 		}
+
+		listen := cctx.String("listen")
+		log.Infow("pilot server", "listen", listen)
+
+		m := mux.NewRouter()
+		m.Handle("/metrics", exporter)
+		m.PathPrefix("/miner").Handler(miner)
 		server := &http.Server{
 			Addr:    listen,
-			Handler: h,
+			Handler: m,
 		}
 
 		go func() {
 			<-ctx.Done()
+			miner.Close()
 			time.Sleep(time.Millisecond * 100)
 			log.Info("shutdown pilot server")
 			server.Shutdown(ctx)
@@ -112,12 +117,4 @@ var runCmd = &cli.Command{
 
 		return server.ListenAndServe()
 	},
-}
-
-func PilotHandler(exporter *prometheus.Exporter) (http.Handler, error) {
-	m := mux.NewRouter()
-
-	m.Handle("/metrics", exporter)
-
-	return m, nil
 }
