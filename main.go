@@ -3,10 +3,8 @@ package main
 import (
 	"net/http"
 	"os"
-	"time"
 
 	"contrib.go.opencensus.io/exporter/prometheus"
-	"github.com/gorilla/mux"
 	"github.com/urfave/cli/v2"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
@@ -99,22 +97,22 @@ var runCmd = &cli.Command{
 		listen := cctx.String("listen")
 		log.Infow("pilot server", "listen", listen)
 
-		m := mux.NewRouter()
-		m.Handle("/metrics", exporter)
-		m.PathPrefix("/miner").Handler(miner)
+		http.Handle("/metrics", exporter)
+		miner.Handle()
 		server := &http.Server{
-			Addr:    listen,
-			Handler: m,
+			Addr: listen,
 		}
 
 		go func() {
 			<-ctx.Done()
-			miner.Close()
-			time.Sleep(time.Millisecond * 100)
 			log.Info("shutdown pilot server")
+			miner.Close()
 			server.Shutdown(ctx)
 		}()
 
-		return server.ListenAndServe()
+		if err := server.ListenAndServe(); err != http.ErrServerClosed {
+			return err
+		}
+		return nil
 	},
 }

@@ -17,15 +17,13 @@ var (
 	Version, _ = tag.NewKey("version")
 	Commit, _  = tag.NewKey("commit")
 
-	ErrorType, _  = tag.NewKey("error_type")
-	RecordType, _ = tag.NewKey("record_type")
+	Endpoint, _ = tag.NewKey("endpoint")
 )
 
 // Measures
 var (
-	Info               = stats.Int64("info", "Arbitrary counter to tag monitor info to", stats.UnitDimensionless)
-	SelfError          = stats.Int64("self/error", "couter for monitor error", stats.UnitDimensionless)
-	SelfRecordDuration = stats.Float64("self/record", "duration of every record", stats.UnitMilliseconds)
+	Info               = stats.Int64("info", "Arbitrary counter to tag pilot info to", stats.UnitDimensionless)
+	APIRequestDuration = stats.Float64("api/request_duration_ms", "Duration of API requests", stats.UnitMilliseconds)
 )
 
 // Views
@@ -37,22 +35,16 @@ var (
 		Aggregation: view.LastValue(),
 		TagKeys:     []tag.Key{Version, Commit},
 	}
-	SelfErrorView = &view.View{
-		Measure:     SelfError,
-		Aggregation: view.Count(),
-		TagKeys:     []tag.Key{ErrorType},
-	}
-	SelfRecordDurationView = &view.View{
-		Measure:     SelfRecordDuration,
+	APIRequestDurationView = &view.View{
+		Measure:     APIRequestDuration,
 		Aggregation: defaultMillisecondsDistribution,
-		TagKeys:     []tag.Key{RecordType},
+		TagKeys:     []tag.Key{Endpoint},
 	}
 )
 
 var Views = []*view.View{
 	InfoView,
-	SelfErrorView,
-	SelfRecordDurationView,
+	APIRequestDurationView,
 }
 
 // SinceInMilliseconds returns the duration of time since the provide time as a float64.
@@ -62,21 +54,10 @@ func SinceInMilliseconds(startTime time.Time) float64 {
 
 // Timer is a function stopwatch, calling it starts the timer,
 // calling the returned function will record the duration.
-func Timer(ctx context.Context, recordType string) func() time.Duration {
-	ctx, _ = tag.New(ctx,
-		tag.Upsert(RecordType, recordType),
-	)
+func Timer(ctx context.Context, m *stats.Float64Measure) func() time.Duration {
 	start := time.Now()
 	return func() time.Duration {
-		stats.Record(ctx, SelfRecordDuration.M(SinceInMilliseconds(start)))
+		stats.Record(ctx, m.M(SinceInMilliseconds(start)))
 		return time.Since(start)
 	}
-}
-
-func RecordError(ctx context.Context, errType string) {
-	ctx, _ = tag.New(ctx,
-		tag.Upsert(ErrorType, errType),
-	)
-
-	stats.Record(ctx, SelfError.M(1))
 }

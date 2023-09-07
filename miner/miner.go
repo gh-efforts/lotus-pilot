@@ -48,11 +48,11 @@ func NewMiner(ctx context.Context, cfg *config.Config) (*Miner, error) {
 	return m, nil
 }
 
-func (m *Miner) add(ma address.Address, mi MinerInfo) {
+func (m *Miner) add(mi MinerInfo) {
 	m.lk.Lock()
 	defer m.lk.Unlock()
 
-	m.miners[ma] = mi
+	m.miners[mi.address] = mi
 }
 
 func (m *Miner) remove(ma address.Address) {
@@ -60,26 +60,35 @@ func (m *Miner) remove(ma address.Address) {
 	defer m.lk.Unlock()
 
 	if c := m.miners[ma].closer; c != nil {
-		log.Infow("closed miner api", "miner", ma)
+		log.Infow("remove closed miner api", "miner", ma)
 		c()
 	}
 
 	delete(m.miners, ma)
 }
 
-func (m *Miner) list() []address.Address {
+func (m *Miner) list() []string {
 	m.lk.RLock()
 	defer m.lk.RUnlock()
 
-	var miners []address.Address
+	var miners []string
 	for miner := range m.miners {
-		miners = append(miners, miner)
+		miners = append(miners, miner.String())
 	}
 
 	return miners
 }
 
-func (m *Miner) do_switch(from address.Address, to address.Address, count int) error {
+func (m *Miner) has(ma address.Address) bool {
+	m.lk.RLock()
+	defer m.lk.RUnlock()
+
+	_, ok := m.miners[ma]
+	return ok
+}
+
+func (m *Miner) doSwitch(from address.Address, to address.Address, count int64) error {
+	log.Infow("doing switch...", "from", from, "to", to, "count", count)
 	return nil
 }
 
@@ -116,6 +125,7 @@ func toMinerInfo(ctx context.Context, m string, info config.APIInfo) (MinerInfo,
 		return MinerInfo{}, err
 	}
 	if apiAddr != maddr {
+		closer()
 		return MinerInfo{}, fmt.Errorf("maddr not match, config maddr: %s, api maddr: %s", maddr, apiAddr)
 	}
 	size, err := api.ActorSectorSize(ctx, maddr)

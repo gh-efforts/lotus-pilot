@@ -8,7 +8,6 @@ require (
 	github.com/filecoin-project/go-jsonrpc v0.3.1
 	github.com/filecoin-project/go-state-types v0.11.1
 	github.com/filecoin-project/lotus v1.23.3
-	github.com/gorilla/mux v1.8.0
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/urfave/cli/v2 v2.25.7
 	go.opencensus.io v0.24.0
