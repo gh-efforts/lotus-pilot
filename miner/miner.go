@@ -12,10 +12,16 @@ import (
 	"github.com/filecoin-project/lotus/api/client"
 	"github.com/filecoin-project/lotus/api/v0api"
 	"github.com/gh-efforts/lotus-pilot/config"
+	"github.com/google/uuid"
 	logging "github.com/ipfs/go-log/v2"
 )
 
 var log = logging.Logger("pilot/miner")
+
+type MinerAPI struct {
+	Miner string         `json:"miner"`
+	API   config.APIInfo `json:"api"`
+}
 
 type MinerInfo struct {
 	api     v0api.StorageMiner
@@ -29,6 +35,10 @@ type Miner struct {
 
 	lk     sync.RWMutex
 	miners map[address.Address]MinerInfo
+
+	ch      chan switching
+	swLk    sync.Mutex
+	switchs map[SwitchID]switching
 }
 
 func NewMiner(ctx context.Context, cfg *config.Config) (*Miner, error) {
@@ -44,7 +54,9 @@ func NewMiner(ctx context.Context, cfg *config.Config) (*Miner, error) {
 	m := &Miner{
 		ctx:    ctx,
 		miners: miners,
+		ch:     make(chan switching, 20),
 	}
+	m.run()
 	return m, nil
 }
 
@@ -87,9 +99,18 @@ func (m *Miner) has(ma address.Address) bool {
 	return ok
 }
 
-func (m *Miner) doSwitch(from address.Address, to address.Address, count int64) error {
-	log.Infow("doing switch...", "from", from, "to", to, "count", count)
-	return nil
+func (m *Miner) doSwitch(from address.Address, to address.Address, count int64) SwitchID {
+	sw := switching{
+		id:    SwitchID(uuid.New()),
+		from:  from,
+		to:    to,
+		count: count,
+	}
+
+	m.ch <- sw
+	log.Debugw("doSwitch", "id", sw.id, "from", from, "to", to, "count", count)
+
+	return sw.id
 }
 
 func (m *Miner) Close() {

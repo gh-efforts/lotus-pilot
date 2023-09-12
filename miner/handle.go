@@ -8,13 +8,7 @@ import (
 	"strings"
 
 	"github.com/filecoin-project/go-address"
-	"github.com/gh-efforts/lotus-pilot/config"
 )
-
-type MinerAPI struct {
-	Miner string         `json:"miner"`
-	API   config.APIInfo `json:"api"`
-}
 
 func (m *Miner) Handle() {
 	http.HandleFunc("/miner/add", middlewareTimer(m.addHandle))
@@ -91,9 +85,6 @@ func (m *Miner) switchHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = m.doSwitch(from, to, count)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	id := m.doSwitch(from, to, count)
+	w.Write([]byte(id.String()))
 }
