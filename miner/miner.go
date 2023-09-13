@@ -36,9 +36,9 @@ type Miner struct {
 	lk     sync.RWMutex
 	miners map[address.Address]MinerInfo
 
-	ch      chan switching
+	ch      chan switchRequest
 	swLk    sync.Mutex
-	switchs map[SwitchID]switching
+	switchs map[SwitchID]*switchState
 }
 
 func NewMiner(ctx context.Context, cfg *config.Config) (*Miner, error) {
@@ -54,7 +54,7 @@ func NewMiner(ctx context.Context, cfg *config.Config) (*Miner, error) {
 	m := &Miner{
 		ctx:    ctx,
 		miners: miners,
-		ch:     make(chan switching, 20),
+		ch:     make(chan switchRequest, 20),
 	}
 	m.run()
 	return m, nil
@@ -100,17 +100,17 @@ func (m *Miner) has(ma address.Address) bool {
 }
 
 func (m *Miner) doSwitch(from address.Address, to address.Address, count int64) SwitchID {
-	sw := switching{
+	req := switchRequest{
 		id:    SwitchID(uuid.New()),
 		from:  from,
 		to:    to,
-		count: count,
+		count: int(count),
 	}
 
-	m.ch <- sw
-	log.Debugw("doSwitch", "id", sw.id, "from", from, "to", to, "count", count)
+	m.ch <- req
+	log.Debugw("doSwitch", "id", req.id, "from", from, "to", to, "count", count)
 
-	return sw.id
+	return req.id
 }
 
 func (m *Miner) Close() {

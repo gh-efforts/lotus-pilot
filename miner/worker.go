@@ -5,10 +5,14 @@ import (
 	"sort"
 	"time"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/storage/sealer/sealtasks"
 	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 	"github.com/google/uuid"
 )
+
+type wst = map[uuid.UUID]storiface.WorkerStats
+type jobs = map[uuid.UUID][]storiface.WorkerJob
 
 type Worker struct {
 	WorkerID  uuid.UUID
@@ -17,30 +21,45 @@ type Worker struct {
 	LastStart map[string]time.Time
 }
 
-func (m *Miner) workerSort(sw switching) ([]Worker, error) {
+type workerState struct {
+	workerID  uuid.UUID
+	hostname  string
+	disableAP bool
+	isSwitch  bool
+}
+
+func (m *Miner) statsAndJobs(ma address.Address) (wst, jobs, error) {
 	m.lk.RLock()
 	defer m.lk.RUnlock()
 
-	mi, ok := m.miners[sw.from]
+	mi, ok := m.miners[ma]
 	if !ok {
-		return nil, fmt.Errorf("not found miner: %s", sw.from)
+		return nil, nil, fmt.Errorf("not found miner: %s", ma)
 	}
-
-	workerHostnames := map[uuid.UUID]string{}
 
 	wst, err := mi.api.WorkerStats(m.ctx)
 	if err != nil {
-		return nil, err
-	}
-
-	for wid, st := range wst {
-		workerHostnames[wid] = st.Info.Hostname
-		log.Debug("WorkerStats", "wid", wid, "TaskCounts", st.TaskCounts)
+		return nil, nil, err
 	}
 
 	jobs, err := mi.api.WorkerJobs(m.ctx)
 	if err != nil {
+		return nil, nil, err
+	}
+
+	return wst, jobs, nil
+}
+
+func (m *Miner) workerPick(req switchRequest) (map[string]struct{}, error) {
+	wst, jobs, err := m.statsAndJobs(req.from)
+	if err != nil {
 		return nil, err
+	}
+
+	workerHostnames := map[uuid.UUID]string{}
+	for wid, st := range wst {
+		workerHostnames[wid] = st.Info.Hostname
+		log.Debug("WorkerStats", "wid", wid, "TaskCounts", st.TaskCounts)
 	}
 
 	var out []Worker
@@ -93,5 +112,15 @@ func (m *Miner) workerSort(sw switching) ([]Worker, error) {
 		return out[i].LastStart["PC1"].Before(out[j].LastStart["PC1"])
 	})
 
-	return out, nil
+	count := req.count
+	if len(out) < req.count {
+		count = len(out)
+	}
+
+	worker := map[string]struct{}{}
+	for _, w := range out[0:count] {
+		worker[w.Hostname] = struct{}{}
+	}
+
+	return worker, nil
 }
