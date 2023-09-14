@@ -85,6 +85,6 @@ func (m *Miner) switchHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := m.doSwitch(from, to, count)
+	id := m.sendSwitch(from, to, count)
 	w.Write([]byte(id.String()))
 }

@@ -37,7 +37,7 @@ type Miner struct {
 	miners map[address.Address]MinerInfo
 
 	ch      chan switchRequest
-	swLk    sync.Mutex
+	swLk    sync.RWMutex
 	switchs map[SwitchID]*switchState
 }
 
@@ -99,7 +99,7 @@ func (m *Miner) has(ma address.Address) bool {
 	return ok
 }
 
-func (m *Miner) doSwitch(from address.Address, to address.Address, count int64) SwitchID {
+func (m *Miner) sendSwitch(from address.Address, to address.Address, count int64) SwitchID {
 	req := switchRequest{
 		id:    SwitchID(uuid.New()),
 		from:  from,
@@ -108,7 +108,7 @@ func (m *Miner) doSwitch(from address.Address, to address.Address, count int64) 
 	}
 
 	m.ch <- req
-	log.Debugw("doSwitch", "id", req.id, "from", from, "to", to, "count", count)
+	log.Debugw("sendSwitch", "id", req.id, "from", from, "to", to, "count", count)
 
 	return req.id
 }

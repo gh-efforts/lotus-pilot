@@ -14,18 +14,27 @@ import (
 type wst = map[uuid.UUID]storiface.WorkerStats
 type jobs = map[uuid.UUID][]storiface.WorkerJob
 
-type Worker struct {
-	WorkerID  uuid.UUID
-	Hostname  string
-	Tasks     map[string]int
-	LastStart map[string]time.Time
+type stateWorker int
+
+const (
+	stateWorkerBegin stateWorker = iota
+	stateWorkerDisabled
+	stateWorkerSwithed
+	stateWorkerStoped
+)
+
+type workerSort struct {
+	workerID  uuid.UUID
+	hostname  string
+	tasks     map[string]int
+	lastStart map[string]time.Time
 }
 
 type workerState struct {
-	workerID  uuid.UUID
-	hostname  string
-	disableAP bool
-	isSwitch  bool
+	workerID uuid.UUID
+	hostname string
+	state    stateWorker
+	errMsg   string
 }
 
 func (m *Miner) statsAndJobs(ma address.Address) (wst, jobs, error) {
@@ -50,7 +59,41 @@ func (m *Miner) statsAndJobs(ma address.Address) (wst, jobs, error) {
 	return wst, jobs, nil
 }
 
-func (m *Miner) workerPick(req switchRequest) (map[string]struct{}, error) {
+func (m *Miner) workerStats(ma address.Address) (wst, error) {
+	m.lk.RLock()
+	defer m.lk.RUnlock()
+
+	mi, ok := m.miners[ma]
+	if !ok {
+		return nil, fmt.Errorf("not found miner: %s", ma)
+	}
+
+	wst, err := mi.api.WorkerStats(m.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return wst, nil
+}
+
+func (m *Miner) workerJobs(ma address.Address) (jobs, error) {
+	m.lk.RLock()
+	defer m.lk.RUnlock()
+
+	mi, ok := m.miners[ma]
+	if !ok {
+		return nil, fmt.Errorf("not found miner: %s", ma)
+	}
+
+	jobs, err := mi.api.WorkerJobs(m.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return jobs, nil
+}
+
+func (m *Miner) workerPick(req switchRequest) (map[uuid.UUID]*workerState, error) {
 	wst, jobs, err := m.statsAndJobs(req.from)
 	if err != nil {
 		return nil, err
@@ -62,65 +105,125 @@ func (m *Miner) workerPick(req switchRequest) (map[string]struct{}, error) {
 		log.Debug("WorkerStats", "wid", wid, "TaskCounts", st.TaskCounts)
 	}
 
-	var out []Worker
+	var worker []workerSort
 	for wid, jobs := range jobs {
-		w := Worker{WorkerID: wid, Hostname: workerHostnames[wid]}
+		w := workerSort{workerID: wid, hostname: workerHostnames[wid]}
 		for _, job := range jobs {
 			if job.RunWait < 0 {
 				continue
 			}
 			if job.Task == sealtasks.TTAddPiece {
-				w.Tasks["AP"] += 1
+				w.tasks["AP"] += 1
 				if job.RunWait == storiface.RWRunning {
-					if w.LastStart["AP"].Before(job.Start) {
-						w.LastStart["AP"] = job.Start
+					if w.lastStart["AP"].Before(job.Start) {
+						w.lastStart["AP"] = job.Start
 					}
 				}
 			}
 			if job.Task == sealtasks.TTPreCommit1 {
-				w.Tasks["PC1"] += 1
+				w.tasks["PC1"] += 1
 				if job.RunWait == storiface.RWRunning {
-					if w.LastStart["PC1"].Before(job.Start) {
-						w.LastStart["PC1"] = job.Start
+					if w.lastStart["PC1"].Before(job.Start) {
+						w.lastStart["PC1"] = job.Start
 					}
 				}
 			}
 			if job.Task == sealtasks.TTPreCommit2 {
-				w.Tasks["PC2"] += 1
+				w.tasks["PC2"] += 1
 				if job.RunWait == storiface.RWRunning {
-					if w.LastStart["PC2"].Before(job.Start) {
-						w.LastStart["PC2"] = job.Start
+					if w.lastStart["PC2"].Before(job.Start) {
+						w.lastStart["PC2"] = job.Start
 					}
 				}
 			}
-			out = append(out, w)
+			worker = append(worker, w)
 		}
 	}
 
 	//TODO: task in sched
 
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Tasks["AP"]+out[i].Tasks["PC1"] != out[j].Tasks["AP"]+out[j].Tasks["PC1"] {
-			return out[i].Tasks["AP"]+out[i].Tasks["PC1"] < out[j].Tasks["AP"]+out[j].Tasks["PC1"]
+	sort.Slice(worker, func(i, j int) bool {
+		if worker[i].tasks["AP"]+worker[i].tasks["PC1"] != worker[j].tasks["AP"]+worker[j].tasks["PC1"] {
+			return worker[i].tasks["AP"]+worker[i].tasks["PC1"] < worker[j].tasks["AP"]+worker[j].tasks["PC1"]
 		}
-		if out[i].Tasks["PC2"] != out[j].Tasks["PC2"] {
-			return out[i].Tasks["PC2"] < out[j].Tasks["PC2"]
+		if worker[i].tasks["PC2"] != worker[j].tasks["PC2"] {
+			return worker[i].tasks["PC2"] < worker[j].tasks["PC2"]
 		}
-		if out[i].LastStart["PC1"].Equal(out[j].LastStart["PC1"]) {
-			return out[i].Hostname < out[j].Hostname
+		if worker[i].lastStart["PC1"].Equal(worker[j].lastStart["PC1"]) {
+			return worker[i].hostname < worker[j].hostname
 		}
-		return out[i].LastStart["PC1"].Before(out[j].LastStart["PC1"])
+		return worker[i].lastStart["PC1"].Before(worker[j].lastStart["PC1"])
 	})
 
 	count := req.count
-	if len(out) < req.count {
-		count = len(out)
+	if len(worker) < req.count {
+		count = len(worker)
 	}
 
-	worker := map[string]struct{}{}
-	for _, w := range out[0:count] {
-		worker[w.Hostname] = struct{}{}
+	ret := map[uuid.UUID]*workerState{}
+	for _, w := range worker[0:count] {
+		ret[w.workerID] = &workerState{
+			workerID: w.workerID,
+			hostname: w.hostname,
+			state:    stateWorkerBegin,
+		}
 	}
 
-	return worker, nil
+	return ret, nil
+}
+
+func (m *Miner) workerSwitch(req switchRequest, wl []uuid.UUID) error {
+	jobs, err := m.workerJobs(req.from)
+	if err != nil {
+		return err
+	}
+	var filter []uuid.UUID
+	for _, w := range wl {
+		if _, ok := jobs[w]; !ok {
+			filter = append(filter, w)
+		}
+	}
+
+	//workerRunCmd()
+	//update switch and worker state
+	return nil
+}
+
+func (m *Miner) disabledWorker(id SwitchID) []uuid.UUID {
+	m.swLk.Lock()
+	defer m.swLk.Unlock()
+
+	out := []uuid.UUID{}
+	ss, ok := m.switchs[id]
+	if ok {
+		for wid, w := range ss.worker {
+			if w.state == stateWorkerDisabled {
+				out = append(out, wid)
+			}
+		}
+	}
+
+	return out
+}
+
+func (m *Miner) switchedWorker(id SwitchID) []uuid.UUID {
+	m.swLk.Lock()
+	defer m.swLk.Unlock()
+
+	out := []uuid.UUID{}
+	ss, ok := m.switchs[id]
+	if ok {
+		for wid, w := range ss.worker {
+			if w.state == stateWorkerSwithed {
+				out = append(out, wid)
+			}
+		}
+	}
+
+	return out
+}
+
+func (m *Miner) updateWorkerState() {
+	m.swLk.Lock()
+	defer m.swLk.Unlock()
 }

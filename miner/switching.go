@@ -7,10 +7,10 @@ import (
 	"github.com/google/uuid"
 )
 
-type state int
+type stateSwitch int
 
 const (
-	stateRequst state = iota
+	stateRequst stateSwitch = iota
 	statePickWorker
 	stateDisabledAP
 	stateSwitching
@@ -33,11 +33,11 @@ type switchRequest struct {
 }
 
 type switchState struct {
-	state  state
+	state  stateSwitch
 	errMsg string
 
 	req    switchRequest
-	worker map[string]struct{} //workerState
+	worker map[uuid.UUID]*workerState //workerID
 
 	cancel chan struct{}
 }
@@ -59,7 +59,7 @@ func (m *Miner) process(req switchRequest) error {
 	ss := &switchState{
 		state:  stateRequst,
 		req:    req,
-		worker: make(map[string]struct{}),
+		worker: make(map[uuid.UUID]*workerState),
 		cancel: make(chan struct{}),
 	}
 	m.update(ss)
@@ -73,9 +73,10 @@ func (m *Miner) process(req switchRequest) error {
 	ss.worker = worker
 	m.update(ss)
 
-	disableAP(worker)
+	//disableAP(worker)
 	ss.state = stateDisabledAP
 	m.update(ss)
+	//update worker state: stateWorkerDisabledAP
 
 	ss.state = stateSwitching
 	m.update(ss)
@@ -110,7 +111,12 @@ func (m *Miner) watch(ss *switchState) {
 	for {
 		select {
 		case <-t.C:
-			//checkWorker()
+			wl := m.disabledWorker(ss.req.id)
+			if len(wl) == 0 {
+				log.Info("no switch worker to found")
+				return
+			}
+			m.workerSwitch(ss.req, wl)
 		case <-ss.cancel:
 
 		case <-m.ctx.Done():
@@ -120,8 +126,8 @@ func (m *Miner) watch(ss *switchState) {
 }
 
 func (m *Miner) cancelSwitch(id SwitchID) {
-	m.swLk.Lock()
-	defer m.swLk.Unlock()
+	m.swLk.RLock()
+	defer m.swLk.RUnlock()
 
 	ss, ok := m.switchs[id]
 	if ok {

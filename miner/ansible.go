@@ -1,13 +1,138 @@
 package miner
 
-func disableAP(worker map[string]struct{}) {
+import (
+	"context"
+	"fmt"
 
+	"github.com/apenella/go-ansible/pkg/adhoc"
+	"github.com/filecoin-project/go-state-types/abi"
+)
+
+var env32G = map[string]interface{}{
+	"MINER_API_INFO":                     "",
+	"TRUST_PARAMS":                       "1",
+	"FIL_PROOFS_USE_GPU_COLUMN_BUILDER":  "1",
+	"FIL_PROOFS_USE_GPU_TREE_BUILDER":    "1",
+	"FIL_PROOFS_USE_MULTICORE_SDR":       "1",
+	"FIL_PROOFS_MULTICORE_SDR_PRODUCERS": "1",
+	"FIL_PROOFS_MAXIMIZE_CACHING":        "1",
+	"FIL_PROOFS_LAYER_CACHE_SIZE":        "32",
+	"FIL_PROOFS_PARENT_CACHE":            "/media/nvme/parent_cache",
+	"P1_SEPARATE_PROCESS":                "1",
+	"P2_SEPARATE_PROCESS":                "1",
+	"PC1_32G_MAX_CONCURRENT":             "24",
+	"PC1_32G_MAX_PARALLELISM":            "1",
+	"PC2_32G_MAX_CONCURRENT":             "2",
+	"PC2_32G_MAX_PARALLELISM_GPU":        "2",
+	"PC2_32G_GPU_UTILIZATION":            "1.0",
+	"AP_32G_MAX_CONCURRENT":              "1",
+	"GET_32G_MAX_CONCURRENT":             "1",
+	"READ_STORAGE_FROM_MINER":            "1",
+	"RUST_LOG":                           "info",
+	"P1_SEPARATE_LOG_PATH":               "/media/nvme/logs",
+	"P2_SEPARATE_LOG_PATH":               "/media/nvme/logs",
 }
 
-func enableAP(worker map[string]struct{}) {
-
+var env64G = map[string]interface{}{
+	"MINER_API_INFO":                     "",
+	"TRUST_PARAMS":                       "1",
+	"FIL_PROOFS_USE_GPU_COLUMN_BUILDER":  "1",
+	"FIL_PROOFS_USE_GPU_TREE_BUILDER":    "1",
+	"FIL_PROOFS_USE_MULTICORE_SDR":       "1",
+	"FIL_PROOFS_MULTICORE_SDR_PRODUCERS": "3",
+	"FIL_PROOFS_MAXIMIZE_CACHING":        "1",
+	"FIL_PROOFS_LAYER_CACHE_SIZE":        "64",
+	"FIL_PROOFS_PARENT_CACHE":            "/media/nvme/parent_cache",
+	"P1_SEPARATE_PROCESS":                "1",
+	"P2_SEPARATE_PROCESS":                "1",
+	"PC1_64G_MAX_CONCURRENT":             "14",
+	"PC1_64G_MAX_PARALLELISM":            "2",
+	"PC2_64G_MAX_CONCURRENT":             "1",
+	"PC2_64G_MAX_PARALLELISM_GPU":        "4",
+	"PC2_64G_GPU_UTILIZATION":            "2.0",
+	"AP_64G_MAX_CONCURRENT":              "1",
+	"GET_64G_MAX_CONCURRENT":             "1",
+	"READ_STORAGE_FROM_MINER":            "1",
+	"RUST_LOG":                           "info",
+	"P1_SEPARATE_LOG_PATH":               "/media/nvme/logs",
+	"P2_SEPARATE_LOG_PATH":               "/media/nvme/logs",
 }
 
-func workerConnect(worker, miner string) {
+func disableAPCmd(ctx context.Context, hostname, miner string) error {
+	cmd := fmt.Sprintf("lotus-worker --worker-repo=%s tasks disable AP", workerRepo(miner))
 
+	ansibleAdhocOptions := &adhoc.AnsibleAdhocOptions{
+		ModuleName: "command",
+		Args:       cmd,
+	}
+
+	adhoc := &adhoc.AnsibleAdhocCmd{
+		Pattern: hostname,
+		Options: ansibleAdhocOptions,
+	}
+
+	log.Debugw("disableAPCmd", "Command: ", adhoc.String())
+
+	err := adhoc.Run(ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func enableAPCmd(ctx context.Context, hostname, miner string) error {
+	cmd := fmt.Sprintf("lotus-worker --worker-repo=%s tasks enable AP", workerRepo(miner))
+
+	ansibleAdhocOptions := &adhoc.AnsibleAdhocOptions{
+		ModuleName: "command",
+		Args:       cmd,
+	}
+
+	adhoc := &adhoc.AnsibleAdhocCmd{
+		Pattern: hostname,
+		Options: ansibleAdhocOptions,
+	}
+
+	log.Debugw("enableAPCmd", "Command: ", adhoc.String())
+
+	err := adhoc.Run(ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func workerRunCmd(ctx context.Context, hostname, miner string, api string, size abi.SectorSize) error {
+	env := env32G
+	if size == 68719476736 {
+		env = env64G
+	}
+	env["MINER_API_INFO"] = api
+
+	path := workerRepo(miner)
+	cmd := fmt.Sprintf("nohup lotus-worker --worker-repo=%s run --commit=false --listen 0.0.0.0:3457 >> %s/daemon.log 2>&1 &", path, path)
+	ansibleAdhocOptions := &adhoc.AnsibleAdhocOptions{
+		ModuleName: "command",
+		Args:       cmd,
+		ExtraVars:  env,
+	}
+
+	adhoc := &adhoc.AnsibleAdhocCmd{
+		Pattern: hostname,
+		Options: ansibleAdhocOptions,
+	}
+
+	log.Debugw("workerRunCmd", "Command: ", adhoc.String())
+
+	err := adhoc.Run(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func workerRepo(miner string) string {
+	return fmt.Sprintf("/media/nvme/%s", miner)
 }
