@@ -85,6 +85,16 @@ func (m *Miner) switchHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := m.sendSwitch(from, to, count)
-	w.Write([]byte(id.String()))
+	req := &switchRequest{
+		from:  from,
+		to:    to,
+		count: int(count),
+	}
+
+	rsp := m.sendSwitch(req)
+	if rsp.err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	w.Write([]byte(rsp.id.String()))
+	//TODO: return picked worker list
 }

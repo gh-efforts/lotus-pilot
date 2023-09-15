@@ -136,3 +136,26 @@ func workerRunCmd(ctx context.Context, hostname, miner string, api string, size 
 func workerRepo(miner string) string {
 	return fmt.Sprintf("/media/nvme/%s", miner)
 }
+
+func workerStopCmd(ctx context.Context, hostname, miner string) error {
+	cmd := fmt.Sprintf("lotus-worker --worker-repo=%s stop", workerRepo(miner))
+
+	ansibleAdhocOptions := &adhoc.AnsibleAdhocOptions{
+		ModuleName: "command",
+		Args:       cmd,
+	}
+
+	adhoc := &adhoc.AnsibleAdhocCmd{
+		Pattern: hostname,
+		Options: ansibleAdhocOptions,
+	}
+
+	log.Debugw("workerStopCmd", "Command: ", adhoc.String())
+
+	err := adhoc.Run(ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

@@ -1,6 +1,7 @@
 package miner
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/filecoin-project/go-address"
@@ -10,44 +11,78 @@ import (
 type stateSwitch int
 
 const (
-	stateRequst stateSwitch = iota
-	statePickWorker
-	stateDisabledAP
-	stateSwitching
-	stateSwitchFinish
+	stateAccepted stateSwitch = iota
+	stateAPDisabled
+	stateSwitched
 
 	stateError
 )
 
-type SwitchID uuid.UUID
+type switchID uuid.UUID
 
-func (s SwitchID) String() string {
+func (s switchID) String() string {
 	return uuid.UUID(s).String()
 }
 
 type switchRequest struct {
-	id    SwitchID
 	from  address.Address
 	to    address.Address
 	count int
+	//指定要切换的worker列表，如果为空，则由pilot选择
+	worker []uuid.UUID
+	//切换前是否禁止AP任务，如果不禁止，则fromMiner的任务全部完成后再切到toMiner
+	disableAP bool
+}
+
+type switchRequestResponse struct {
+	rsp chan switchResponse
+	req *switchRequest
+}
+
+type switchResponse struct {
+	id     switchID
+	worker map[uuid.UUID]*workerState //hostname
+	err    error
 }
 
 type switchState struct {
+	id     switchID
 	state  stateSwitch
 	errMsg string
 
-	req    switchRequest
+	req    *switchRequest
 	worker map[uuid.UUID]*workerState //workerID
 
 	cancel chan struct{}
+}
+
+func newSwitchState(req *switchRequest, worker map[uuid.UUID]*workerState) *switchState {
+	return &switchState{
+		id:     switchID(uuid.New()),
+		state:  stateAccepted,
+		req:    req,
+		worker: worker,
+		cancel: make(chan struct{}),
+	}
+}
+
+func (m *Miner) sendSwitch(req *switchRequest) switchResponse {
+	srr := switchRequestResponse{
+		rsp: make(chan switchResponse),
+		req: req,
+	}
+
+	m.ch <- srr
+
+	return <-srr.rsp
 }
 
 func (m *Miner) run() {
 	go func() {
 		for {
 			select {
-			case req := <-m.ch:
-				go m.process(req)
+			case srr := <-m.ch:
+				go m.process(srr)
 			case <-m.ctx.Done():
 				return
 			}
@@ -55,47 +90,56 @@ func (m *Miner) run() {
 	}()
 }
 
-func (m *Miner) process(req switchRequest) error {
-	ss := &switchState{
-		state:  stateRequst,
-		req:    req,
-		worker: make(map[uuid.UUID]*workerState),
-		cancel: make(chan struct{}),
-	}
-	m.update(ss)
-
-	worker, err := m.workerPick(req)
+func (m *Miner) process(srr switchRequestResponse) error {
+	worker, err := m.workerPick(srr.req)
 	if err != nil {
-		m.updateErr(ss.req.id, err.Error())
+		srr.rsp <- switchResponse{err: err}
 		return err
 	}
-	ss.state = statePickWorker
-	ss.worker = worker
-	m.update(ss)
 
-	//disableAP(worker)
-	ss.state = stateDisabledAP
-	m.update(ss)
-	//update worker state: stateWorkerDisabledAP
+	ss := newSwitchState(srr.req, worker)
+	srr.rsp <- switchResponse{id: ss.id, worker: worker, err: nil}
+	m.addSwitch(ss)
 
-	ss.state = stateSwitching
-	m.update(ss)
+	//disableAP
+	if srr.req.disableAP {
+		m.disableAP(ss.id)
+	}
+
 	m.watch(ss)
 
-	ss.state = stateSwitchFinish
-	m.update(ss)
+	//switch complete
 
 	return nil
 }
 
-func (m *Miner) update(ss *switchState) {
+func (m *Miner) disableAP(id switchID) error {
 	m.swLk.Lock()
 	defer m.swLk.Unlock()
 
-	m.switchs[ss.req.id] = ss
+	ss, ok := m.switchs[id]
+	if !ok {
+		return fmt.Errorf("switch id: %s not found", id)
+	}
+
+	for _, ws := range ss.worker {
+		err := disableAPCmd(m.ctx, ws.hostname, ss.req.from.String())
+		if err != nil {
+			continue
+		}
+		ws.state = stateWorkerAPDisabled
+	}
+	return nil
 }
 
-func (m *Miner) updateErr(id SwitchID, err string) {
+func (m *Miner) addSwitch(ss *switchState) {
+	m.swLk.Lock()
+	defer m.swLk.Unlock()
+
+	m.switchs[ss.id] = ss
+}
+
+func (m *Miner) updateErr(id switchID, err string) {
 	m.swLk.Lock()
 	defer m.swLk.Unlock()
 
@@ -111,7 +155,7 @@ func (m *Miner) watch(ss *switchState) {
 	for {
 		select {
 		case <-t.C:
-			wl := m.disabledWorker(ss.req.id)
+			wl := m.disabledWorker(ss.id)
 			if len(wl) == 0 {
 				log.Info("no switch worker to found")
 				return
@@ -125,7 +169,7 @@ func (m *Miner) watch(ss *switchState) {
 	}
 }
 
-func (m *Miner) cancelSwitch(id SwitchID) {
+func (m *Miner) cancelSwitch(id switchID) {
 	m.swLk.RLock()
 	defer m.swLk.RUnlock()
 
@@ -135,7 +179,7 @@ func (m *Miner) cancelSwitch(id SwitchID) {
 	}
 }
 
-func (m *Miner) removeSwitch(id SwitchID) {
+func (m *Miner) removeSwitch(id switchID) {
 	m.swLk.Lock()
 	defer m.swLk.Unlock()
 

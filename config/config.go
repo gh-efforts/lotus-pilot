@@ -2,7 +2,9 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
 
 	logging "github.com/ipfs/go-log/v2"
 )
@@ -13,6 +15,15 @@ type APIInfo struct {
 	Addr  string `json:"addr"`
 	Token string `json:"token"`
 }
+
+func (a *APIInfo) toAPIInfo() string {
+	ss := strings.Split(a.Addr, ":")
+	if len(ss) != 2 {
+		return ""
+	}
+	return fmt.Sprintf("%s:/ip4/%s/tcp%s/http", a.Token, ss[0], ss[1])
+}
+
 type Config struct {
 	Miners map[string]APIInfo `json:"miners"`
 }

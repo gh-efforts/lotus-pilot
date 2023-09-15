@@ -12,7 +12,6 @@ import (
 	"github.com/filecoin-project/lotus/api/client"
 	"github.com/filecoin-project/lotus/api/v0api"
 	"github.com/gh-efforts/lotus-pilot/config"
-	"github.com/google/uuid"
 	logging "github.com/ipfs/go-log/v2"
 )
 
@@ -36,9 +35,9 @@ type Miner struct {
 	lk     sync.RWMutex
 	miners map[address.Address]MinerInfo
 
-	ch      chan switchRequest
+	ch      chan switchRequestResponse
 	swLk    sync.RWMutex
-	switchs map[SwitchID]*switchState
+	switchs map[switchID]*switchState
 }
 
 func NewMiner(ctx context.Context, cfg *config.Config) (*Miner, error) {
@@ -54,7 +53,7 @@ func NewMiner(ctx context.Context, cfg *config.Config) (*Miner, error) {
 	m := &Miner{
 		ctx:    ctx,
 		miners: miners,
-		ch:     make(chan switchRequest, 20),
+		ch:     make(chan switchRequestResponse, 20),
 	}
 	m.run()
 	return m, nil
@@ -97,20 +96,6 @@ func (m *Miner) has(ma address.Address) bool {
 
 	_, ok := m.miners[ma]
 	return ok
-}
-
-func (m *Miner) sendSwitch(from address.Address, to address.Address, count int64) SwitchID {
-	req := switchRequest{
-		id:    SwitchID(uuid.New()),
-		from:  from,
-		to:    to,
-		count: int(count),
-	}
-
-	m.ch <- req
-	log.Debugw("sendSwitch", "id", req.id, "from", from, "to", to, "count", count)
-
-	return req.id
 }
 
 func (m *Miner) Close() {
