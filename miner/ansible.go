@@ -104,12 +104,12 @@ func enableAPCmd(ctx context.Context, hostname, miner string) error {
 	return nil
 }
 
-func workerRunCmd(ctx context.Context, hostname, miner string, api string, size abi.SectorSize) error {
+func workerRunCmd(ctx context.Context, hostname, miner string, token string, size abi.SectorSize) error {
 	env := env32G
 	if size == 68719476736 {
 		env = env64G
 	}
-	env["MINER_API_INFO"] = api
+	env["MINER_API_INFO"] = token
 
 	path := workerRepo(miner)
 	cmd := fmt.Sprintf("nohup lotus-worker --worker-repo=%s run --commit=false --listen 0.0.0.0:3457 >> %s/daemon.log 2>&1 &", path, path)

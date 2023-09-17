@@ -16,7 +16,7 @@ type APIInfo struct {
 	Token string `json:"token"`
 }
 
-func (a *APIInfo) toAPIInfo() string {
+func (a *APIInfo) ToAPIInfo() string {
 	ss := strings.Split(a.Addr, ":")
 	if len(ss) != 2 {
 		return ""

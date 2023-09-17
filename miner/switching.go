@@ -1,18 +1,18 @@
 package miner
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/google/uuid"
 )
 
 type stateSwitch int
 
 const (
-	stateAccepted stateSwitch = iota
-	stateAPDisabled
+	stateAccepted  stateSwitch = iota
+	stateSwitching             //waiting to switch
 	stateSwitched
 
 	stateError
@@ -53,17 +53,11 @@ type switchState struct {
 	req    *switchRequest
 	worker map[uuid.UUID]*workerState //workerID
 
-	cancel chan struct{}
-}
+	//to miner info
+	size  abi.SectorSize
+	token string
 
-func newSwitchState(req *switchRequest, worker map[uuid.UUID]*workerState) *switchState {
-	return &switchState{
-		id:     switchID(uuid.New()),
-		state:  stateAccepted,
-		req:    req,
-		worker: worker,
-		cancel: make(chan struct{}),
-	}
+	cancel chan struct{}
 }
 
 func (m *Miner) sendSwitch(req *switchRequest) switchResponse {
@@ -90,46 +84,138 @@ func (m *Miner) run() {
 	}()
 }
 
-func (m *Miner) process(srr switchRequestResponse) error {
+func (m *Miner) process(srr switchRequestResponse) {
+	mi, err := m.getMiner(srr.req.to)
+	if err != nil {
+		srr.rsp <- switchResponse{err: err}
+		return
+	}
+
 	worker, err := m.workerPick(srr.req)
 	if err != nil {
 		srr.rsp <- switchResponse{err: err}
-		return err
+		return
 	}
 
-	ss := newSwitchState(srr.req, worker)
+	ss := &switchState{
+		id:     switchID(uuid.New()),
+		state:  stateAccepted,
+		req:    srr.req,
+		worker: worker,
+		size:   mi.size,
+		token:  mi.token,
+		cancel: make(chan struct{}),
+	}
 	srr.rsp <- switchResponse{id: ss.id, worker: worker, err: nil}
 	m.addSwitch(ss)
 
-	//disableAP
-	if srr.req.disableAP {
-		m.disableAP(ss.id)
-	}
+	m.disableAP(ss.id)
 
-	m.watch(ss)
+	t := time.NewTicker(time.Minute * 5)
+	for {
+		select {
+		case <-t.C:
+			wi, err := m.getWorkerInfo(ss.req.from)
+			if err != nil {
+				log.Errorf("getWorkerInfo: %s", err)
+				continue
+			}
+			m.update(ss.id, wi)
+		case <-ss.cancel:
+			//TODO: cancel switch
+		case <-m.ctx.Done():
+			return
+		}
+	}
 
 	//switch complete
 
-	return nil
 }
 
-func (m *Miner) disableAP(id switchID) error {
+func (m *Miner) disableAP(id switchID) {
 	m.swLk.Lock()
 	defer m.swLk.Unlock()
 
 	ss, ok := m.switchs[id]
 	if !ok {
-		return fmt.Errorf("switch id: %s not found", id)
+		log.Errorw("switchID not found", "id", id)
+		return
 	}
 
 	for _, ws := range ss.worker {
-		err := disableAPCmd(m.ctx, ws.hostname, ss.req.from.String())
-		if err != nil {
-			continue
+		if ss.req.disableAP {
+			err := disableAPCmd(m.ctx, ws.hostname, ss.req.from.String())
+			if err != nil {
+				log.Errorw("disable ap cmd", "err", err.Error())
+				ws.try += 1
+				ws.errMsg = err.Error()
+				continue
+			}
 		}
-		ws.state = stateWorkerAPDisabled
+		ws.state = stateWorkerSwitching
 	}
-	return nil
+
+	ss.state = stateSwitching
+}
+
+func (m *Miner) update(id switchID, wi map[uuid.UUID]workerInfo) {
+	m.swLk.Lock()
+	defer m.swLk.Unlock()
+
+	ss, ok := m.switchs[id]
+	if !ok {
+		log.Errorf("switchID not found: %s", id)
+		return
+	}
+
+	for wid, ws := range ss.worker {
+		switch ws.state {
+		case stateWorkerPicked:
+			if ss.req.disableAP {
+				err := disableAPCmd(m.ctx, ws.hostname, ss.req.from.String())
+				if err != nil {
+					log.Errorf("disableAPCmd", err.Error())
+					ws.updateErr(err.Error())
+					continue
+				}
+			}
+			ws.state = stateWorkerSwitching
+		case stateWorkerSwitching:
+			w, ok := wi[wid]
+			if !ok {
+				log.Errorf("not found workerID: %s", wid)
+				continue
+			}
+			if w.canSwitch() {
+				err := workerRunCmd(m.ctx, w.hostname, ss.req.from.String(), ss.token, ss.size)
+				if err != nil {
+					log.Errorf("workerRunCmd", err.Error())
+					ws.updateErr(err.Error())
+					continue
+				}
+				ws.state = stateWorkerSwithed
+			}
+		case stateWorkerSwithed:
+			w, ok := wi[wid]
+			if !ok {
+				log.Errorf("not found workerID: %s", wid)
+				continue
+			}
+			if w.canStop() {
+				err := workerStopCmd(m.ctx, ws.hostname, ss.req.from.String())
+				if err != nil {
+					log.Errorf("workerStopCmd", err.Error())
+					ws.updateErr(err.Error())
+					continue
+				}
+				ws.state = stateWorkerStoped
+			}
+		default:
+			log.Debugw("switch state", "id", id, "workerID", ws.workerID, "worker state", ws.state)
+		}
+
+	}
+
 }
 
 func (m *Miner) addSwitch(ss *switchState) {
@@ -137,36 +223,6 @@ func (m *Miner) addSwitch(ss *switchState) {
 	defer m.swLk.Unlock()
 
 	m.switchs[ss.id] = ss
-}
-
-func (m *Miner) updateErr(id switchID, err string) {
-	m.swLk.Lock()
-	defer m.swLk.Unlock()
-
-	ss, ok := m.switchs[id]
-	if ok {
-		ss.state = stateError
-		ss.errMsg = err
-	}
-}
-
-func (m *Miner) watch(ss *switchState) {
-	t := time.NewTicker(time.Minute * 5)
-	for {
-		select {
-		case <-t.C:
-			wl := m.disabledWorker(ss.id)
-			if len(wl) == 0 {
-				log.Info("no switch worker to found")
-				return
-			}
-			m.workerSwitch(ss.req, wl)
-		case <-ss.cancel:
-
-		case <-m.ctx.Done():
-			return
-		}
-	}
 }
 
 func (m *Miner) cancelSwitch(id switchID) {

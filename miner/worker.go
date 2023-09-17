@@ -16,13 +16,17 @@ type jobs = map[uuid.UUID][]storiface.WorkerJob
 type stateWorker int
 
 const (
-	stateWorkerPicked stateWorker = iota
-	stateWorkerAPDisabled
+	stateWorkerPicked    stateWorker = iota
+	stateWorkerSwitching             //waiting to switch
 	stateWorkerSwithed
 	stateWorkerStoped
+
+	stateWorkerError
 )
 
-type workerSort struct {
+const ErrTryCount = 10
+
+type workerInfo struct {
 	workerID  uuid.UUID
 	hostname  string
 	runing    map[string]int //taskType
@@ -37,10 +41,41 @@ type workerState struct {
 	hostname string
 	state    stateWorker
 	errMsg   string
+	try      int
 }
 
-func (w *workerSort) sum(tt string) int {
+func (w *workerState) updateErr(errMsg string) {
+	w.try += 1
+	w.errMsg = errMsg
+	if w.try > ErrTryCount {
+		w.state = stateWorkerError
+	}
+}
+
+func (w *workerInfo) sum(tt string) int {
 	return w.runing[tt] + w.prepared[tt] + w.assigned[tt] + w.sched[tt]
+}
+
+func (w *workerInfo) canSwitch() bool {
+	return w.sum("AP")+w.sum("PC1")+w.sum("PC2") == 0
+}
+
+func (w *workerInfo) canStop() bool {
+	var all int
+	for _, v := range w.runing {
+		all += v
+	}
+	for _, v := range w.prepared {
+		all += v
+	}
+	for _, v := range w.assigned {
+		all += v
+	}
+	for _, v := range w.sched {
+		all += v
+	}
+
+	return all == 0
 }
 
 func (m *Miner) statsAndJobs(ma address.Address) (wst, jobs, error) {
@@ -99,19 +134,15 @@ func (m *Miner) workerJobs(ma address.Address) (jobs, error) {
 	return jobs, nil
 }
 
-func (m *Miner) workerPick(req *switchRequest) (map[uuid.UUID]*workerState, error) {
-	wst, jobs, err := m.statsAndJobs(req.from)
+func (m *Miner) getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, error) {
+	wst, jobs, err := m.statsAndJobs(ma)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(wst) < req.count {
-		return nil, fmt.Errorf("not enough worker. miner: %s has: %d need: %d", req.from, len(wst), req.count)
-	}
-
-	worker := map[uuid.UUID]workerSort{}
+	worker := map[uuid.UUID]workerInfo{}
 	for wid, st := range wst {
-		worker[wid] = workerSort{
+		worker[wid] = workerInfo{
 			workerID:  wid,
 			hostname:  st.Info.Hostname,
 			runing:    map[string]int{},
@@ -147,13 +178,51 @@ func (m *Miner) workerPick(req *switchRequest) (map[uuid.UUID]*workerState, erro
 
 	//TODO: task in sched
 
-	var ws []workerSort
-	for _, w := range worker {
-		ws = append(ws, w)
+	return worker, nil
+}
+
+func (m *Miner) workerPick(req *switchRequest) (map[uuid.UUID]*workerState, error) {
+	out := map[uuid.UUID]*workerState{}
+
+	if len(req.worker) != 0 {
+		//specify worker from requst
+		wst, err := m.workerStats(req.from)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, w := range req.worker {
+			ws, ok := wst[w]
+			if !ok {
+				return nil, fmt.Errorf("worker: %s not found in wst", w)
+			}
+			out[w] = &workerState{
+				workerID: w,
+				hostname: ws.Info.Hostname,
+				state:    stateWorkerPicked,
+			}
+		}
+
+		return out, nil
 	}
-	sort.Slice(ws, func(i, j int) bool {
-		wi := ws[i]
-		wj := ws[j]
+
+	worker, err := m.getWorkerInfo(req.from)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(worker) < req.count {
+		return nil, fmt.Errorf("not enough worker. miner: %s has: %d need: %d", req.from, len(worker), req.count)
+	}
+
+	var workerSort []workerInfo
+	for _, w := range worker {
+		workerSort = append(workerSort, w)
+	}
+
+	sort.Slice(workerSort, func(i, j int) bool {
+		wi := workerSort[i]
+		wj := workerSort[j]
 
 		if wi.sum("AP")+wi.sum("PC1") != wj.sum("AP")+wj.sum("PC1") {
 			return wi.sum("AP")+wi.sum("PC1") < wj.sum("AP")+wj.sum("PC1")
@@ -170,72 +239,13 @@ func (m *Miner) workerPick(req *switchRequest) (map[uuid.UUID]*workerState, erro
 		return wi.lastStart["PC1"].Before(wj.lastStart["PC1"])
 	})
 
-	ret := map[uuid.UUID]*workerState{}
-	for _, w := range ws[0:req.count] {
-		ret[w.workerID] = &workerState{
+	for _, w := range workerSort[0:req.count] {
+		out[w.workerID] = &workerState{
 			workerID: w.workerID,
 			hostname: w.hostname,
 			state:    stateWorkerPicked,
 		}
 	}
 
-	return ret, nil
-}
-
-func (m *Miner) workerSwitch(req *switchRequest, wl []uuid.UUID) error {
-	jobs, err := m.workerJobs(req.from)
-	if err != nil {
-		return err
-	}
-	var filter []uuid.UUID
-	for _, w := range wl {
-		if _, ok := jobs[w]; !ok {
-			filter = append(filter, w)
-		}
-	}
-
-	//TODO: task in sched
-
-	//workerRunCmd()
-	//update switch and worker state
-	return nil
-}
-
-func (m *Miner) disabledWorker(id switchID) []uuid.UUID {
-	m.swLk.Lock()
-	defer m.swLk.Unlock()
-
-	out := []uuid.UUID{}
-	ss, ok := m.switchs[id]
-	if ok {
-		for wid, w := range ss.worker {
-			if w.state == stateWorkerAPDisabled {
-				out = append(out, wid)
-			}
-		}
-	}
-
-	return out
-}
-
-func (m *Miner) switchedWorker(id switchID) []uuid.UUID {
-	m.swLk.Lock()
-	defer m.swLk.Unlock()
-
-	out := []uuid.UUID{}
-	ss, ok := m.switchs[id]
-	if ok {
-		for wid, w := range ss.worker {
-			if w.state == stateWorkerSwithed {
-				out = append(out, wid)
-			}
-		}
-	}
-
-	return out
-}
-
-func (m *Miner) updateWorkerState() {
-	m.swLk.Lock()
-	defer m.swLk.Unlock()
+	return out, nil
 }

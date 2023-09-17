@@ -27,6 +27,7 @@ type MinerInfo struct {
 	closer  jsonrpc.ClientCloser
 	address address.Address
 	size    abi.SectorSize
+	token   string
 }
 
 type Miner struct {
@@ -64,6 +65,17 @@ func (m *Miner) add(mi MinerInfo) {
 	defer m.lk.Unlock()
 
 	m.miners[mi.address] = mi
+}
+
+func (m *Miner) getMiner(ma address.Address) (MinerInfo, error) {
+	m.lk.RLock()
+	defer m.lk.RUnlock()
+
+	mi, ok := m.miners[ma]
+	if !ok {
+		return MinerInfo{}, fmt.Errorf("not found miner: %s", ma)
+	}
+	return mi, nil
 }
 
 func (m *Miner) remove(ma address.Address) {
@@ -140,5 +152,5 @@ func toMinerInfo(ctx context.Context, m string, info config.APIInfo) (MinerInfo,
 	}
 	log.Infow("connected to miner", "miner", maddr, "addr", info.Addr)
 
-	return MinerInfo{api: api, closer: closer, address: maddr, size: size}, nil
+	return MinerInfo{api: api, closer: closer, address: maddr, size: size, token: info.ToAPIInfo()}, nil
 }
