@@ -52,9 +52,10 @@ func NewMiner(ctx context.Context, cfg *config.Config) (*Miner, error) {
 		miners[mi.address] = mi
 	}
 	m := &Miner{
-		ctx:    ctx,
-		miners: miners,
-		ch:     make(chan switchRequestResponse, 20),
+		ctx:     ctx,
+		miners:  miners,
+		ch:      make(chan switchRequestResponse, 20),
+		switchs: make(map[switchID]*switchState),
 	}
 	m.run()
 	return m, nil

@@ -27,6 +27,8 @@ func main() {
 
 	local := []*cli.Command{
 		runCmd,
+		minerCmd,
+		switchCmd,
 	}
 
 	app := &cli.App{
@@ -42,7 +44,8 @@ func main() {
 }
 
 var runCmd = &cli.Command{
-	Name: "run",
+	Name:  "run",
+	Usage: "run pilot server",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:  "listen",

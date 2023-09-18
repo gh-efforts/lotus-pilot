@@ -14,9 +14,21 @@ const (
 	stateAccepted  stateSwitch = iota
 	stateSwitching             //waiting to switch
 	stateSwitched
-
+	stateCanceled
 	stateError
 )
+
+var stateSwitchNames = map[stateSwitch]string{
+	stateAccepted:  "accepted",
+	stateSwitching: "switching",
+	stateSwitched:  "switched",
+	stateCanceled:  "canceled",
+	stateError:     "error",
+}
+
+func (s stateSwitch) String() string {
+	return stateSwitchNames[s]
+}
 
 type switchID uuid.UUID
 
@@ -122,7 +134,8 @@ func (m *Miner) process(srr switchRequestResponse) {
 			}
 			m.update(ss.id, wi)
 		case <-ss.cancel:
-			//TODO: cancel switch
+			log.Infof("switch ID: %s canceled", ss.id)
+			return
 		case <-m.ctx.Done():
 			return
 		}
@@ -226,11 +239,12 @@ func (m *Miner) addSwitch(ss *switchState) {
 }
 
 func (m *Miner) cancelSwitch(id switchID) {
-	m.swLk.RLock()
-	defer m.swLk.RUnlock()
+	m.swLk.Lock()
+	defer m.swLk.Unlock()
 
 	ss, ok := m.switchs[id]
 	if ok {
+		ss.state = stateCanceled
 		close(ss.cancel)
 	}
 }
@@ -240,4 +254,58 @@ func (m *Miner) removeSwitch(id switchID) {
 	defer m.swLk.Unlock()
 
 	delete(m.switchs, id)
+}
+
+func (m *Miner) getSwitch(id switchID) SwitchState {
+	m.swLk.RLock()
+	defer m.swLk.RUnlock()
+
+	ss, ok := m.switchs[id]
+	if !ok {
+		return SwitchState{}
+	}
+
+	worker := []string{}
+	for _, w := range ss.req.worker {
+		worker = append(worker, w.String())
+	}
+	req := SwitchRequest{
+		From:   ss.req.from.String(),
+		To:     ss.req.to.String(),
+		Count:  ss.req.count,
+		Worker: worker,
+	}
+
+	ws := []WorkerState{}
+	for _, w := range ss.worker {
+		ws = append(ws, WorkerState{
+			WorkerID: w.workerID.String(),
+			Hostname: w.hostname,
+			State:    w.state.String(),
+			ErrMsg:   w.errMsg,
+			Try:      w.try,
+		})
+	}
+
+	ret := SwitchState{
+		ID:     ss.id.String(),
+		State:  ss.state.String(),
+		ErrMsg: ss.errMsg,
+		Req:    req,
+		Worker: ws,
+	}
+
+	return ret
+}
+
+func (m *Miner) listSwitch() []string {
+	m.swLk.RLock()
+	defer m.swLk.RUnlock()
+
+	var out []string
+	for _, s := range m.switchs {
+		out = append(out, s.id.String())
+	}
+
+	return out
 }

@@ -24,6 +24,18 @@ const (
 	stateWorkerError
 )
 
+var stateWorkerNames = map[stateWorker]string{
+	stateWorkerPicked:    "workerPicked",
+	stateWorkerSwitching: "workerSwitching",
+	stateWorkerSwithed:   "workerSwithed",
+	stateWorkerStoped:    "workerStoped",
+	stateWorkerError:     "workerError",
+}
+
+func (s stateWorker) String() string {
+	return stateWorkerNames[s]
+}
+
 const ErrTryCount = 10
 
 type workerInfo struct {
@@ -182,6 +194,7 @@ func (m *Miner) getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, err
 }
 
 func (m *Miner) workerPick(req *switchRequest) (map[uuid.UUID]*workerState, error) {
+	//TODO: 排除miner自身的local worker
 	out := map[uuid.UUID]*workerState{}
 
 	if len(req.worker) != 0 {
