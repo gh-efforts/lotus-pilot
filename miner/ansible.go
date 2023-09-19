@@ -63,7 +63,7 @@ func disableAPCmd(ctx context.Context, hostname, miner string) error {
 	cmd := fmt.Sprintf("lotus-worker --worker-repo=%s tasks disable AP", workerRepo(miner))
 
 	ansibleAdhocOptions := &adhoc.AnsibleAdhocOptions{
-		ModuleName: "command",
+		ModuleName: "shell",
 		Args:       cmd,
 	}
 
@@ -82,11 +82,11 @@ func disableAPCmd(ctx context.Context, hostname, miner string) error {
 	return nil
 }
 
-func enableAPCmd(ctx context.Context, hostname, miner string) error {
-	cmd := fmt.Sprintf("lotus-worker --worker-repo=%s tasks enable AP", workerRepo(miner))
+func enableAPCmd(ctx context.Context, hostname, from string) error {
+	cmd := fmt.Sprintf("lotus-worker --worker-repo=%s tasks enable AP", workerRepo(from))
 
 	ansibleAdhocOptions := &adhoc.AnsibleAdhocOptions{
-		ModuleName: "command",
+		ModuleName: "shell",
 		Args:       cmd,
 	}
 
@@ -105,17 +105,17 @@ func enableAPCmd(ctx context.Context, hostname, miner string) error {
 	return nil
 }
 
-func workerRunCmd(ctx context.Context, hostname, miner string, token string, size abi.SectorSize) error {
+func workerRunCmd(ctx context.Context, hostname, to string, token string, size abi.SectorSize) error {
 	env := env32G
 	if size == 68719476736 {
 		env = env64G
 	}
 	env["MINER_API_INFO"] = token
 
-	path := workerRepo(miner)
-	cmd := fmt.Sprintf("nohup lotus-worker --worker-repo=%s run --commit=false --listen 0.0.0.0:3457 >> %s/daemon.log 2>&1 &", path, path)
+	path := workerRepo(to)
+	cmd := fmt.Sprintf("mkdir -p %s && nohup lotus-worker --worker-repo=%s run --commit=false --listen 0.0.0.0:3457 >> %s/daemon.log 2>&1 &", path, path, path)
 	ansibleAdhocOptions := &adhoc.AnsibleAdhocOptions{
-		ModuleName: "command",
+		ModuleName: "shell",
 		Args:       cmd,
 		ExtraVars:  env,
 	}
@@ -141,11 +141,11 @@ func workerRepo(miner string) string {
 	return fmt.Sprintf("/media/nvme/%s", miner)
 }
 
-func workerStopCmd(ctx context.Context, hostname, miner string) error {
-	cmd := fmt.Sprintf("lotus-worker --worker-repo=%s stop", workerRepo(miner))
+func workerStopCmd(ctx context.Context, hostname, from string) error {
+	cmd := fmt.Sprintf("lotus-worker --worker-repo=%s stop", workerRepo(from))
 
 	ansibleAdhocOptions := &adhoc.AnsibleAdhocOptions{
-		ModuleName: "command",
+		ModuleName: "shell",
 		Args:       cmd,
 	}
 

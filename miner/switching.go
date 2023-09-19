@@ -152,9 +152,6 @@ func (m *Miner) process(srr switchRequestResponse) {
 			return
 		}
 	}
-
-	//switch complete
-
 }
 
 func (m *Miner) disableAP(id switchID) error {
@@ -212,7 +209,7 @@ func (m *Miner) update(id switchID, wi map[uuid.UUID]workerInfo) (bool, error) {
 				continue
 			}
 			if w.canSwitch() {
-				err := workerRunCmd(m.ctx, w.hostname, ss.req.from.String(), ss.token, ss.size)
+				err := workerRunCmd(m.ctx, w.hostname, ss.req.to.String(), ss.token, ss.size)
 				if err != nil {
 					log.Errorf("workerRunCmd", err.Error())
 					ws.updateErr(err.Error())
