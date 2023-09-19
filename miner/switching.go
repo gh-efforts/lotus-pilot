@@ -201,6 +201,7 @@ func (m *Miner) update(id switchID, wi map[uuid.UUID]workerInfo) (bool, error) {
 					continue
 				}
 			}
+			//TODO: check disableAP success or not
 			ws.state = stateWorkerSwitching
 		case stateWorkerSwitching:
 			w, ok := wi[wid]
@@ -215,6 +216,7 @@ func (m *Miner) update(id switchID, wi map[uuid.UUID]workerInfo) (bool, error) {
 					ws.updateErr(err.Error())
 					continue
 				}
+				//TODO: check worker run success or not
 				ws.state = stateWorkerSwithed
 			}
 		case stateWorkerSwithed:
@@ -230,6 +232,7 @@ func (m *Miner) update(id switchID, wi map[uuid.UUID]workerInfo) (bool, error) {
 					ws.updateErr(err.Error())
 					continue
 				}
+				//TODO: check worker stop success or not
 				ws.state = stateWorkerStoped
 			}
 		case stateWorkerStoped:
