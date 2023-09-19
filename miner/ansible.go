@@ -130,6 +130,9 @@ func workerRunCmd(ctx context.Context, hostname, miner string, token string, siz
 	if err != nil {
 		return err
 	}
+	//TODO: 可能执行失败, 需要检查执行输出是否包含以下信息
+	//[WARNING]: Could not match supplied host pattern, ignoring: DCZ-2007FD101U42-L01-W29
+	//[WARNING]: No hosts matched, nothing to do
 	return nil
 }
 

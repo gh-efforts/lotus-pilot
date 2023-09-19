@@ -1,6 +1,7 @@
 package miner
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/filecoin-project/go-address"
@@ -121,7 +122,10 @@ func (m *Miner) process(srr switchRequestResponse) {
 	srr.rsp <- switchResponse{id: ss.id, worker: worker, err: nil}
 	m.addSwitch(ss)
 
-	m.disableAP(ss.id)
+	if err := m.disableAP(ss.id); err != nil {
+		log.Error(err)
+		return
+	}
 
 	t := time.NewTicker(time.Minute * 5)
 	for {
@@ -132,7 +136,15 @@ func (m *Miner) process(srr switchRequestResponse) {
 				log.Errorf("getWorkerInfo: %s", err)
 				continue
 			}
-			m.update(ss.id, wi)
+			complete, err := m.update(ss.id, wi)
+			if err != nil {
+				log.Errorf("update: %s", err)
+				continue
+			}
+			if complete {
+				log.Infof("switchID: %s complete", ss.id)
+				return
+			}
 		case <-ss.cancel:
 			log.Infof("switch ID: %s canceled", ss.id)
 			return
@@ -145,14 +157,13 @@ func (m *Miner) process(srr switchRequestResponse) {
 
 }
 
-func (m *Miner) disableAP(id switchID) {
+func (m *Miner) disableAP(id switchID) error {
 	m.swLk.Lock()
 	defer m.swLk.Unlock()
 
 	ss, ok := m.switchs[id]
 	if !ok {
-		log.Errorw("switchID not found", "id", id)
-		return
+		return fmt.Errorf("switchID: %s not found", id)
 	}
 
 	for _, ws := range ss.worker {
@@ -169,18 +180,19 @@ func (m *Miner) disableAP(id switchID) {
 	}
 
 	ss.state = stateSwitching
+	return nil
 }
 
-func (m *Miner) update(id switchID, wi map[uuid.UUID]workerInfo) {
+func (m *Miner) update(id switchID, wi map[uuid.UUID]workerInfo) (bool, error) {
 	m.swLk.Lock()
 	defer m.swLk.Unlock()
 
 	ss, ok := m.switchs[id]
 	if !ok {
-		log.Errorf("switchID not found: %s", id)
-		return
+		return false, fmt.Errorf("switchID: %s not found", id)
 	}
 
+	workerCompleted := 0
 	for wid, ws := range ss.worker {
 		switch ws.state {
 		case stateWorkerPicked:
@@ -223,12 +235,21 @@ func (m *Miner) update(id switchID, wi map[uuid.UUID]workerInfo) {
 				}
 				ws.state = stateWorkerStoped
 			}
+		case stateWorkerStoped:
+			fallthrough
+		case stateWorkerError:
+			workerCompleted += 1
 		default:
-			log.Debugw("switch state", "id", id, "workerID", ws.workerID, "worker state", ws.state)
+			log.Warnw("switch state", "id", id, "workerID", ws.workerID, "worker state", ws.state)
 		}
-
 	}
 
+	if workerCompleted == len(ss.worker) {
+		ss.state = stateSwitched
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func (m *Miner) addSwitch(ss *switchState) {

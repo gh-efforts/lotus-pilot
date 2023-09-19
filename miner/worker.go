@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/lotus/storage/sealer/sealtasks"
 	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 	"github.com/google/uuid"
 )
@@ -154,6 +155,11 @@ func (m *Miner) getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, err
 
 	worker := map[uuid.UUID]workerInfo{}
 	for wid, st := range wst {
+		if !workerCheck(st) {
+			log.Debugf("worker: %s illegal", wid)
+			continue
+		}
+
 		worker[wid] = workerInfo{
 			workerID:  wid,
 			hostname:  st.Info.Hostname,
@@ -170,7 +176,7 @@ func (m *Miner) getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, err
 				continue
 			}
 			if _, ok := worker[wid]; !ok {
-				log.Warnf("wid not found")
+				log.Warnf("worker: %s not found", wid)
 				continue
 			}
 
@@ -194,7 +200,6 @@ func (m *Miner) getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, err
 }
 
 func (m *Miner) workerPick(req *switchRequest) (map[uuid.UUID]*workerState, error) {
-	//TODO: 排除miner自身的local worker
 	out := map[uuid.UUID]*workerState{}
 
 	if len(req.worker) != 0 {
@@ -209,6 +214,11 @@ func (m *Miner) workerPick(req *switchRequest) (map[uuid.UUID]*workerState, erro
 			if !ok {
 				return nil, fmt.Errorf("worker: %s not found in wst", w)
 			}
+
+			if !workerCheck(ws) {
+				return nil, fmt.Errorf("specify worker: %s illegal", w)
+			}
+
 			out[w] = &workerState{
 				workerID: w,
 				hostname: ws.Info.Hostname,
@@ -261,4 +271,35 @@ func (m *Miner) workerPick(req *switchRequest) (map[uuid.UUID]*workerState, erro
 	}
 
 	return out, nil
+}
+
+func workerCheck(st storiface.WorkerStats) bool {
+	//skip winPost worker
+	if len(st.Tasks) > 0 {
+		if st.Tasks[0].WorkerType() != sealtasks.WorkerSealing {
+			return false
+		}
+	}
+
+	//skip diabled worker
+	if !st.Enabled {
+		return false
+	}
+
+	//skip miner local worker
+	enablePC1 := false
+	enablePC2 := false
+	for _, t := range st.Tasks {
+		if t == sealtasks.TTPreCommit1 {
+			enablePC1 = true
+		}
+		if t == sealtasks.TTPreCommit2 {
+			enablePC2 = true
+		}
+	}
+	if !enablePC1 && !enablePC2 {
+		return false
+	}
+
+	return true
 }
