@@ -127,7 +127,7 @@ func (m *Miner) process(srr switchRequestResponse) {
 		return
 	}
 
-	t := time.NewTicker(time.Minute * 5)
+	t := time.NewTicker(m.interval)
 	for {
 		select {
 		case <-t.C:

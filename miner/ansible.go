@@ -8,6 +8,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 )
 
+// TODO: support update
 var env32G = map[string]interface{}{
 	"MINER_API_INFO":                     "",
 	"TRUST_PARAMS":                       "1",

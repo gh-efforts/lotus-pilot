@@ -16,6 +16,8 @@ import (
 	"github.com/gh-efforts/lotus-pilot/config"
 	"github.com/gh-efforts/lotus-pilot/metrics"
 	"github.com/gh-efforts/lotus-pilot/miner"
+
+	_ "net/http/pprof"
 )
 
 var (

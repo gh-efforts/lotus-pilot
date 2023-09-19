@@ -53,6 +53,8 @@ func (m *Miner) Handle() {
 	http.HandleFunc("/switch/cancel/", middlewareTimer(m.cancelSwitchHandle))
 	http.HandleFunc("/switch/remove/", middlewareTimer(m.removeSwitchHandle))
 	http.HandleFunc("/switch/list", middlewareTimer(m.listSwitchHandle))
+
+	//TODO: worker list
 }
 
 func (m *Miner) addHandle(w http.ResponseWriter, r *http.Request) {

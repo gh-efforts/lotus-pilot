@@ -5,11 +5,32 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	logging "github.com/ipfs/go-log/v2"
 )
 
 var log = logging.Logger("pilot/config")
+
+type Duration time.Duration
+
+func (d Duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Duration(d).String())
+}
+
+func (d *Duration) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	td, err := time.ParseDuration(s)
+	if err != nil {
+		return err
+	}
+	*d = Duration(td)
+
+	return nil
+}
 
 type APIInfo struct {
 	Addr  string `json:"addr"`
@@ -25,7 +46,8 @@ func (a *APIInfo) ToAPIInfo() string {
 }
 
 type Config struct {
-	Miners map[string]APIInfo `json:"miners"`
+	Interval Duration           `json:"interval"`
+	Miners   map[string]APIInfo `json:"miners"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -59,6 +81,7 @@ func DefaultConfig() *Config {
 	miners["t028064"] = miner64
 
 	return &Config{
-		Miners: miners,
+		Interval: Duration(time.Minute),
+		Miners:   miners,
 	}
 }

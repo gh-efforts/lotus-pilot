@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-jsonrpc"
@@ -31,7 +32,8 @@ type MinerInfo struct {
 }
 
 type Miner struct {
-	ctx context.Context
+	ctx      context.Context
+	interval time.Duration
 
 	lk     sync.RWMutex
 	miners map[address.Address]MinerInfo
@@ -52,10 +54,11 @@ func NewMiner(ctx context.Context, cfg *config.Config) (*Miner, error) {
 		miners[mi.address] = mi
 	}
 	m := &Miner{
-		ctx:     ctx,
-		miners:  miners,
-		ch:      make(chan switchRequestResponse, 20),
-		switchs: make(map[switchID]*switchState),
+		ctx:      ctx,
+		interval: time.Duration(cfg.Interval),
+		miners:   miners,
+		ch:       make(chan switchRequestResponse, 20),
+		switchs:  make(map[switchID]*switchState),
 	}
 	m.run()
 	return m, nil
