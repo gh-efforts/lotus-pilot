@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/filecoin-project/go-address"
@@ -54,6 +55,8 @@ func (m *Miner) Handle() {
 	http.HandleFunc("/switch/remove/", middlewareTimer(m.removeSwitchHandle))
 	http.HandleFunc("/switch/list", middlewareTimer(m.listSwitchHandle))
 
+	http.HandleFunc("/script/create/", middlewareTimer(m.createScriptHandle))
+
 	//TODO: worker list
 }
 
@@ -81,6 +84,12 @@ func (m *Miner) addHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = createScript(mi.address.String(), mi.token, mi.size)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	m.add(mi)
 }
 
@@ -94,6 +103,11 @@ func (m *Miner) removeHandle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m.remove(maddr)
+
+	err = os.Remove(fmt.Sprintf("%s/%s.sh", SCRIPTS_PATH, maddr.String()))
+	if err != nil {
+		log.Error(err)
+	}
 }
 
 func (m *Miner) listHandle(w http.ResponseWriter, r *http.Request) {
@@ -211,4 +225,14 @@ func (m *Miner) listSwitchHandle(w http.ResponseWriter, r *http.Request) {
 	log.Debugw("listSwitchHandle", "path", r.URL.Path)
 
 	w.Write([]byte(fmt.Sprintf("%s", m.listSwitch())))
+}
+
+func (m *Miner) createScriptHandle(w http.ResponseWriter, r *http.Request) {
+	log.Debugw("createScriptHandle", "path", r.URL.Path)
+	id := strings.TrimPrefix(r.URL.Path, "/script/create/")
+	err := m.createScript(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }

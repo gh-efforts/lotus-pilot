@@ -52,6 +52,11 @@ func NewMiner(ctx context.Context, cfg *config.Config) (*Miner, error) {
 		}
 
 		miners[mi.address] = mi
+
+		err = createScript(miner, info.ToAPIInfo(), mi.size)
+		if err != nil {
+			return nil, err
+		}
 	}
 	m := &Miner{
 		ctx:      ctx,
@@ -123,6 +128,37 @@ func (m *Miner) Close() {
 			miner.closer()
 		}
 	}
+}
+
+func (m *Miner) createScript(id string) error {
+	m.lk.Lock()
+	defer m.lk.Unlock()
+
+	if id == "all" {
+		for _, mi := range m.miners {
+			err := createScript(mi.address.String(), mi.token, mi.size)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	maddr, err := address.NewFromString(id)
+	if err != nil {
+		return err
+	}
+	mi, ok := m.miners[maddr]
+	if !ok {
+		return fmt.Errorf("miner: %s not found", id)
+	}
+	err = createScript(mi.address.String(), mi.token, mi.size)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func toMinerInfo(ctx context.Context, m string, info config.APIInfo) (MinerInfo, error) {

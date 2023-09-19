@@ -31,6 +31,7 @@ func main() {
 		runCmd,
 		minerCmd,
 		switchCmd,
+		scriptCmd,
 	}
 
 	app := &cli.App{
