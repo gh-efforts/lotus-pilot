@@ -42,7 +42,7 @@ func (a *APIInfo) ToAPIInfo() string {
 	if len(ss) != 2 {
 		return ""
 	}
-	return fmt.Sprintf("%s:/ip4/%s/tcp%s/http", a.Token, ss[0], ss[1])
+	return fmt.Sprintf("%s:/ip4/%s/tcp/%s/http", a.Token, ss[0], ss[1])
 }
 
 type Config struct {

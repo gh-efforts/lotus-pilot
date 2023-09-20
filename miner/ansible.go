@@ -49,6 +49,8 @@ func createScript(miner, token string, size abi.SectorSize) error {
 		return err
 	}
 
+	log.Infof("create script: %s", fmt.Sprintf("%s/%s.sh", SCRIPTS_PATH, miner))
+
 	return nil
 }
 

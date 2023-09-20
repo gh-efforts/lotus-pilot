@@ -53,7 +53,7 @@ func NewMiner(ctx context.Context, cfg *config.Config) (*Miner, error) {
 
 		miners[mi.address] = mi
 
-		err = createScript(miner, info.ToAPIInfo(), mi.size)
+		err = createScript(mi.address.String(), info.ToAPIInfo(), mi.size)
 		if err != nil {
 			return nil, err
 		}
