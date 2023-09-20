@@ -291,10 +291,11 @@ func (m *Miner) getSwitch(id switchID) SwitchState {
 		worker = append(worker, w.String())
 	}
 	req := SwitchRequest{
-		From:   ss.req.from.String(),
-		To:     ss.req.to.String(),
-		Count:  ss.req.count,
-		Worker: worker,
+		From:      ss.req.from.String(),
+		To:        ss.req.to.String(),
+		Count:     ss.req.count,
+		Worker:    worker,
+		DisableAP: ss.req.disableAP,
 	}
 
 	ws := []WorkerState{}

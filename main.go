@@ -32,6 +32,7 @@ func main() {
 		minerCmd,
 		switchCmd,
 		scriptCmd,
+		pprofCmd,
 	}
 
 	app := &cli.App{

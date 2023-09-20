@@ -10,6 +10,8 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 )
 
+//TODO: 执行ansible命令设置超时时间，防止worker网络问题一直卡那
+
 const SCRIPTS_PATH = "./scripts"
 
 type MinerPase struct {
