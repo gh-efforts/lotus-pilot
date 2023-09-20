@@ -1,6 +1,6 @@
 module github.com/gh-efforts/lotus-pilot
 
-go 1.21.0
+go 1.20
 
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
