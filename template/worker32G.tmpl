@@ -1,6 +1,15 @@
 #!/bin/bash
 ulimit -n 655350
 
+# 随机获取可用端口
+while
+  port=$(shuf -n 1 -i 49152-65535)
+  netstat -atun | grep -q "$port"
+do
+  continue
+done
+listen=0.0.0.0:$port
+
 base_dir=/media/nvme/{{.MinerID}}
 mkdir -p $base_dir
 
@@ -85,5 +94,4 @@ export RUST_LOG=info
 export P1_SEPARATE_LOG_PATH=$log_dir
 export P2_SEPARATE_LOG_PATH=$log_dir
 
-
-nohup lotus-worker --worker-repo=$repo_dir run --commit=false --precommit2=false --precommit1=false --addpiece=false --prove-replica-update2=false --replica-update=false>> $base_dir/worker.log 2>&1 &
+nohup lotus-worker --worker-repo=$repo_dir run --listen=$listen --commit=false --precommit2=false --precommit1=false --addpiece=false --prove-replica-update2=false --replica-update=false>> $base_dir/worker.log 2>&1 &
