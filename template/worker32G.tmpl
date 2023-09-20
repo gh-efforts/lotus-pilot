@@ -26,7 +26,7 @@ export MINER_API_INFO={{.MinerAPIInfo}}
 
 ## 选择可以用的显卡
 if [[ -f /etc/gpu.conf ]];then
-        gpu_x=cat /etc/gpu.conf
+        gpu_x=$(cat /etc/gpu.conf)
         if [[ $(echo $gpu_x|grep unset) ]];then
                         unset CUDA_VISIBLE_DEVICES
 			gpu_number=$(nvidia-smi -L|wc -l)
@@ -94,4 +94,4 @@ export RUST_LOG=info
 export P1_SEPARATE_LOG_PATH=$log_dir
 export P2_SEPARATE_LOG_PATH=$log_dir
 
-nohup lotus-worker --worker-repo=$repo_dir run --listen=$listen --commit=false --precommit2=false --precommit1=false --addpiece=false --prove-replica-update2=false --replica-update=false>> $base_dir/worker.log 2>&1 &
+nohup lotus-worker --worker-repo=$repo_dir run --listen=$listen --commit=false >> $base_dir/worker.log 2>&1 &

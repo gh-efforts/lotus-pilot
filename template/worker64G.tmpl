@@ -88,4 +88,4 @@ export RUST_LOG=info
 export P1_SEPARATE_LOG_PATH=$log_dir
 export P2_SEPARATE_LOG_PATH=$log_dir
 
-nohup lotus-worker --worker-repo=$repo_dir run --listen=$listen --commit=false --precommit2=false --precommit1=false --addpiece=false --prove-replica-update2=false --replica-update=false>> $base_dir/worker.log 2>&1 &
+nohup lotus-worker --worker-repo=$repo_dir run --listen=$listen --commit=false >> $base_dir/worker.log 2>&1 &
