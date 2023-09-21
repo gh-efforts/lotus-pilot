@@ -131,7 +131,7 @@ func (m *Miner) process(srr switchRequestResponse) {
 	for {
 		select {
 		case <-t.C:
-			wi, err := m.getWorkerInfo(ss.req.from)
+			wi, err := m.getWorkerInfo(ss.req.from, nil)
 			if err != nil {
 				log.Errorf("getWorkerInfo: %s", err)
 				continue
@@ -327,6 +327,23 @@ func (m *Miner) listSwitch() []string {
 	var out []string
 	for _, s := range m.switchs {
 		out = append(out, s.id.String())
+	}
+
+	return out
+}
+
+func (m *Miner) switchingWorkers() map[uuid.UUID]struct{} {
+	m.swLk.RLock()
+	defer m.swLk.RUnlock()
+
+	out := map[uuid.UUID]struct{}{}
+
+	for _, s := range m.switchs {
+		for w, ws := range s.worker {
+			if ws.state != stateWorkerStoped {
+				out[w] = struct{}{}
+			}
+		}
 	}
 
 	return out

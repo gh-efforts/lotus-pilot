@@ -147,7 +147,7 @@ func (m *Miner) workerJobs(ma address.Address) (jobs, error) {
 	return jobs, nil
 }
 
-func (m *Miner) getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, error) {
+func (m *Miner) getWorkerInfo(ma address.Address, switchingWorkers map[uuid.UUID]struct{}) (map[uuid.UUID]workerInfo, error) {
 	wst, jobs, err := m.statsAndJobs(ma)
 	if err != nil {
 		return nil, err
@@ -157,6 +157,11 @@ func (m *Miner) getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, err
 	for wid, st := range wst {
 		if !workerCheck(st) {
 			log.Debugf("worker: %s illegal", wid)
+			continue
+		}
+
+		if _, ok := switchingWorkers[wid]; ok {
+			log.Debugf("specify worker: %s already switching", wid)
 			continue
 		}
 
@@ -200,6 +205,7 @@ func (m *Miner) getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, err
 }
 
 func (m *Miner) workerPick(req *switchRequest) (map[uuid.UUID]*workerState, error) {
+	switchingWorkers := m.switchingWorkers()
 	out := map[uuid.UUID]*workerState{}
 
 	if len(req.worker) != 0 {
@@ -219,6 +225,10 @@ func (m *Miner) workerPick(req *switchRequest) (map[uuid.UUID]*workerState, erro
 				return nil, fmt.Errorf("specify worker: %s illegal", w)
 			}
 
+			if _, ok := switchingWorkers[w]; ok {
+				return nil, fmt.Errorf("specify worker: %s already switching", w)
+			}
+
 			out[w] = &workerState{
 				workerID: w,
 				hostname: ws.Info.Hostname,
@@ -229,7 +239,7 @@ func (m *Miner) workerPick(req *switchRequest) (map[uuid.UUID]*workerState, erro
 		return out, nil
 	}
 
-	worker, err := m.getWorkerInfo(req.from)
+	worker, err := m.getWorkerInfo(req.from, switchingWorkers)
 	if err != nil {
 		return nil, err
 	}
