@@ -14,7 +14,7 @@ import (
 
 const SCRIPTS_PATH = "./scripts"
 
-type MinerPase struct {
+type MinerParse struct {
 	MinerID      string
 	MinerAPIInfo string
 }
@@ -23,7 +23,7 @@ func createScript(miner, token string, size abi.SectorSize) error {
 	var t *template.Template
 	var err error
 
-	mp := MinerPase{
+	mp := MinerParse{
 		MinerID:      miner,
 		MinerAPIInfo: token,
 	}

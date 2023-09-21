@@ -147,6 +147,7 @@ func (m *Miner) workerJobs(ma address.Address) (jobs, error) {
 	return jobs, nil
 }
 
+// TODO: cache worker info to reduce call statsAndJobs
 func (m *Miner) getWorkerInfo(ma address.Address, switchingWorkers map[uuid.UUID]struct{}) (map[uuid.UUID]workerInfo, error) {
 	wst, jobs, err := m.statsAndJobs(ma)
 	if err != nil {
