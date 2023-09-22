@@ -8,6 +8,7 @@ import (
 
 	"github.com/apenella/go-ansible/pkg/adhoc"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/gh-efforts/lotus-pilot/build"
 )
 
 //TODO: 执行ansible命令设置超时时间，防止worker网络问题一直卡那
@@ -57,6 +58,10 @@ func createScript(miner, token string, size abi.SectorSize) error {
 }
 
 func disableAPCmd(ctx context.Context, hostname, miner string) error {
+	if build.AnsibleTest {
+		log.Debug("disableAPCmd test")
+		return nil
+	}
 	arg := fmt.Sprintf("lotus-worker --worker-repo=%s tasks disable AP", workerRepo(miner))
 
 	ansibleAdhocOptions := &adhoc.AnsibleAdhocOptions{
@@ -80,6 +85,10 @@ func disableAPCmd(ctx context.Context, hostname, miner string) error {
 }
 
 func enableAPCmd(ctx context.Context, hostname, from string) error {
+	if build.AnsibleTest {
+		log.Debug("enableAPCmd test")
+		return nil
+	}
 	arg := fmt.Sprintf("lotus-worker --worker-repo=%s tasks enable AP", workerRepo(from))
 
 	ansibleAdhocOptions := &adhoc.AnsibleAdhocOptions{
@@ -103,6 +112,10 @@ func enableAPCmd(ctx context.Context, hostname, from string) error {
 }
 
 func copyScriptCmd(ctx context.Context, hostname, to string, token string, size abi.SectorSize) error {
+	if build.AnsibleTest {
+		log.Debug("copyScriptCmd test")
+		return nil
+	}
 	src := fmt.Sprintf("%s/%s.sh", SCRIPTS_PATH, to)
 	dest := fmt.Sprintf("/root/%s.sh", to)
 
@@ -132,6 +145,10 @@ func copyScriptCmd(ctx context.Context, hostname, to string, token string, size 
 }
 
 func workerRunCmd(ctx context.Context, hostname, to string, token string, size abi.SectorSize) error {
+	if build.AnsibleTest {
+		log.Debug("workerRunCmd test")
+		return nil
+	}
 	err := copyScriptCmd(ctx, hostname, to, token, size)
 	if err != nil {
 		return err
@@ -165,6 +182,10 @@ func workerRepo(miner string) string {
 }
 
 func workerStopCmd(ctx context.Context, hostname, from string) error {
+	if build.AnsibleTest {
+		log.Debug("workerStopCmd test")
+		return nil
+	}
 	arg := fmt.Sprintf("lotus-worker --worker-repo=%s stop", workerRepo(from))
 
 	ansibleAdhocOptions := &adhoc.AnsibleAdhocOptions{

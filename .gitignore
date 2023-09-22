@@ -24,4 +24,4 @@ config_test.json
 .DS_Store
 .vscode
 .idea
-lotus-pilot
+./lotus-pilot
