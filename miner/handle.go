@@ -78,7 +78,7 @@ func (m *Miner) addHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mi, err := toMinerInfo(r.Context(), minerAPI.Miner, minerAPI.API)
+	mi, err := toMinerInfo(m.ctx, minerAPI.Miner, minerAPI.API)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
