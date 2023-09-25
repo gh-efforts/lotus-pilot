@@ -131,7 +131,7 @@ func (m *Miner) process(srr switchRequestResponse) {
 	for {
 		select {
 		case <-t.C:
-			wi, err := m.getWorkerInfo(ss.req.from, nil)
+			wi, err := m.getWorkerInfo(ss.req.from)
 			if err != nil {
 				log.Errorf("getWorkerInfo: %s", err)
 				continue

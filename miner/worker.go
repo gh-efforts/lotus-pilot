@@ -1,11 +1,13 @@
 package miner
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/storage/sealer/sealtasks"
 	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 	"github.com/google/uuid"
@@ -13,6 +15,25 @@ import (
 
 type wst = map[uuid.UUID]storiface.WorkerStats
 type jobs = map[uuid.UUID][]storiface.WorkerJob
+type sts = map[storiface.ID][]storiface.Decl
+
+type SchedInfo struct {
+	SchedInfo    SchedDiagInfo
+	ReturnedWork []string
+	Waiting      []string
+	CallToWork   map[string]string
+	EarlyRet     []string
+}
+type SchedDiagInfo struct {
+	Requests    []SchedDiagRequestInfo
+	OpenWindows []string
+}
+type SchedDiagRequestInfo struct {
+	Sector   abi.SectorID
+	TaskType sealtasks.TaskType
+	Priority int
+	SchedId  uuid.UUID
+}
 
 type stateWorker int
 
@@ -41,12 +62,14 @@ const ErrTryCount = 10
 
 type workerInfo struct {
 	workerID  uuid.UUID
+	storageID storiface.ID
 	hostname  string
 	runing    map[string]int //taskType
 	prepared  map[string]int
 	assigned  map[string]int
 	lastStart map[string]time.Time //last runing start time
 	sched     map[string]int       //task in sched
+	sectors   map[abi.SectorID]struct{}
 }
 
 type workerState struct {
@@ -88,91 +111,91 @@ func (w *workerInfo) canStop() bool {
 		all += v
 	}
 
-	return all == 0
+	return all+len(w.sectors) == 0
 }
 
-func (m *Miner) statsAndJobs(ma address.Address) (wst, jobs, error) {
+func (m *Miner) workerInfoAPI(ma address.Address) (wst, jobs, sts, SchedDiagInfo, error) {
 	m.lk.RLock()
 	defer m.lk.RUnlock()
 
 	mi, ok := m.miners[ma]
 	if !ok {
-		return nil, nil, fmt.Errorf("not found miner: %s", ma)
+		return nil, nil, nil, SchedDiagInfo{}, fmt.Errorf("not found miner: %s", ma)
 	}
 
 	wst, err := mi.api.WorkerStats(m.ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, SchedDiagInfo{}, err
 	}
 
 	jobs, err := mi.api.WorkerJobs(m.ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, SchedDiagInfo{}, err
 	}
 
-	return wst, jobs, nil
-}
-
-func (m *Miner) workerStats(ma address.Address) (wst, error) {
-	m.lk.RLock()
-	defer m.lk.RUnlock()
-
-	mi, ok := m.miners[ma]
-	if !ok {
-		return nil, fmt.Errorf("not found miner: %s", ma)
-	}
-
-	wst, err := mi.api.WorkerStats(m.ctx)
+	sts, err := mi.api.StorageList(m.ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, SchedDiagInfo{}, err
 	}
 
-	return wst, nil
-}
-
-func (m *Miner) workerJobs(ma address.Address) (jobs, error) {
-	m.lk.RLock()
-	defer m.lk.RUnlock()
-
-	mi, ok := m.miners[ma]
-	if !ok {
-		return nil, fmt.Errorf("not found miner: %s", ma)
-	}
-
-	jobs, err := mi.api.WorkerJobs(m.ctx)
+	schedb, err := mi.api.SealingSchedDiag(m.ctx, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, SchedDiagInfo{}, err
 	}
 
-	return jobs, nil
+	j, err := json.Marshal(&schedb)
+	if err != nil {
+		return nil, nil, nil, SchedDiagInfo{}, err
+	}
+
+	var b SchedInfo
+	err = json.Unmarshal(j, &b)
+	if err != nil {
+		return nil, nil, nil, SchedDiagInfo{}, err
+	}
+
+	log.Debug(b.SchedInfo)
+	return wst, jobs, sts, b.SchedInfo, nil
 }
 
 // TODO: cache worker info to reduce call statsAndJobs
-func (m *Miner) getWorkerInfo(ma address.Address, switchingWorkers map[uuid.UUID]struct{}) (map[uuid.UUID]workerInfo, error) {
-	wst, jobs, err := m.statsAndJobs(ma)
+func (m *Miner) getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, error) {
+	wst, jobs, sts, diag, err := m.workerInfoAPI(ma)
 	if err != nil {
 		return nil, err
 	}
 
 	worker := map[uuid.UUID]workerInfo{}
+	sectorWorker := map[abi.SectorID]uuid.UUID{}
 	for wid, st := range wst {
 		if !workerCheck(st) {
 			log.Debugf("worker: %s illegal", wid)
 			continue
 		}
 
-		if _, ok := switchingWorkers[wid]; ok {
-			log.Debugf("specify worker: %s already switching", wid)
-			continue
+		var id storiface.ID
+		for _, p := range st.Paths {
+			if p.CanSeal {
+				id = p.ID
+				break
+			}
+		}
+
+		sectors := map[abi.SectorID]struct{}{}
+		for _, d := range sts[id] {
+			sectors[d.SectorID] = struct{}{}
+			sectorWorker[d.SectorID] = wid
 		}
 
 		worker[wid] = workerInfo{
 			workerID:  wid,
+			storageID: id,
 			hostname:  st.Info.Hostname,
 			runing:    map[string]int{},
 			prepared:  map[string]int{},
 			assigned:  map[string]int{},
 			lastStart: make(map[string]time.Time),
+			sectors:   sectors,
 		}
 	}
 
@@ -200,9 +223,38 @@ func (m *Miner) getWorkerInfo(ma address.Address, switchingWorkers map[uuid.UUID
 		}
 	}
 
-	//TODO: task in sched
+	//task in sched
+	for _, req := range diag.Requests {
+		wid, ok := sectorWorker[req.Sector]
+		if !ok {
+			log.Debugf("sector: %s not found in sectorWorker", req.Sector)
+			continue
+		}
+		if _, ok := worker[wid]; !ok {
+			log.Warnf("worker: %s not found", wid)
+			continue
+		}
+		worker[wid].sched[req.TaskType.Short()] += 1
+	}
 
 	return worker, nil
+}
+
+func (m *Miner) workerStats(ma address.Address) (wst, error) {
+	m.lk.RLock()
+	defer m.lk.RUnlock()
+
+	mi, ok := m.miners[ma]
+	if !ok {
+		return nil, fmt.Errorf("not found miner: %s", ma)
+	}
+
+	wst, err := mi.api.WorkerStats(m.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return wst, nil
 }
 
 func (m *Miner) workerPick(req *switchRequest) (map[uuid.UUID]*workerState, error) {
@@ -240,7 +292,7 @@ func (m *Miner) workerPick(req *switchRequest) (map[uuid.UUID]*workerState, erro
 		return out, nil
 	}
 
-	worker, err := m.getWorkerInfo(req.from, switchingWorkers)
+	worker, err := m.getWorkerInfo(req.from)
 	if err != nil {
 		return nil, err
 	}
@@ -251,6 +303,11 @@ func (m *Miner) workerPick(req *switchRequest) (map[uuid.UUID]*workerState, erro
 
 	var workerSort []workerInfo
 	for _, w := range worker {
+		//skip switchingWorkers
+		if _, ok := switchingWorkers[w.workerID]; ok {
+			continue
+		}
+
 		workerSort = append(workerSort, w)
 	}
 
