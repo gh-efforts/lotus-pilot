@@ -8,8 +8,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/gh-efforts/lotus-pilot/config"
 	"github.com/gh-efforts/lotus-pilot/miner"
+	"github.com/gh-efforts/lotus-pilot/repo/config"
 	"github.com/urfave/cli/v2"
 )
 

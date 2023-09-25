@@ -12,7 +12,8 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api/client"
 	"github.com/filecoin-project/lotus/api/v0api"
-	"github.com/gh-efforts/lotus-pilot/config"
+	"github.com/gh-efforts/lotus-pilot/repo"
+	"github.com/gh-efforts/lotus-pilot/repo/config"
 	logging "github.com/ipfs/go-log/v2"
 )
 
@@ -41,11 +42,18 @@ type Miner struct {
 	ch      chan switchRequestResponse
 	swLk    sync.RWMutex
 	switchs map[switchID]*switchState
+
+	repo *repo.Repo
 }
 
-func NewMiner(ctx context.Context, cfg *config.Config) (*Miner, error) {
+func NewMiner(ctx context.Context, r *repo.Repo) (*Miner, error) {
+	conf, err := r.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	miners := map[address.Address]MinerInfo{}
-	for miner, info := range cfg.Miners {
+	for miner, info := range conf.Miners {
 		mi, err := toMinerInfo(ctx, miner, info)
 		if err != nil {
 			return nil, err
@@ -53,17 +61,18 @@ func NewMiner(ctx context.Context, cfg *config.Config) (*Miner, error) {
 
 		miners[mi.address] = mi
 
-		err = createScript(mi.address.String(), info.ToAPIInfo(), mi.size)
+		err = r.CreateScript(mi.address.String(), info.ToAPIInfo(), mi.size)
 		if err != nil {
 			return nil, err
 		}
 	}
 	m := &Miner{
 		ctx:      ctx,
-		interval: time.Duration(cfg.Interval),
+		interval: time.Duration(conf.Interval),
 		miners:   miners,
 		ch:       make(chan switchRequestResponse, 20),
 		switchs:  make(map[switchID]*switchState),
+		repo:     r,
 	}
 	m.run()
 	return m, nil
@@ -136,7 +145,7 @@ func (m *Miner) createScript(id string) error {
 
 	if id == "all" {
 		for _, mi := range m.miners {
-			err := createScript(mi.address.String(), mi.token, mi.size)
+			err := m.repo.CreateScript(mi.address.String(), mi.token, mi.size)
 			if err != nil {
 				return err
 			}
@@ -153,7 +162,7 @@ func (m *Miner) createScript(id string) error {
 	if !ok {
 		return fmt.Errorf("miner: %s not found", id)
 	}
-	err = createScript(mi.address.String(), mi.token, mi.size)
+	err = m.repo.CreateScript(mi.address.String(), mi.token, mi.size)
 	if err != nil {
 		return err
 	}

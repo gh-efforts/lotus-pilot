@@ -14,9 +14,9 @@ import (
 
 	cliutil "github.com/filecoin-project/lotus/cli/util"
 	"github.com/gh-efforts/lotus-pilot/build"
-	"github.com/gh-efforts/lotus-pilot/config"
 	"github.com/gh-efforts/lotus-pilot/metrics"
 	"github.com/gh-efforts/lotus-pilot/miner"
+	"github.com/gh-efforts/lotus-pilot/repo"
 
 	_ "net/http/pprof"
 )
@@ -29,6 +29,7 @@ func main() {
 	logging.SetLogLevel("*", "INFO")
 
 	local := []*cli.Command{
+		initCmd,
 		runCmd,
 		minerCmd,
 		switchCmd,
@@ -41,11 +42,29 @@ func main() {
 		Usage:    "lotus pilot server",
 		Version:  build.UserVersion(),
 		Commands: local,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "repo",
+				Value: "~/.lotuspilot",
+			},
+		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
 		log.Errorf("%+v", err)
 	}
+}
+
+var initCmd = &cli.Command{
+	Name:  "init",
+	Usage: "init repo",
+	Action: func(cctx *cli.Context) error {
+		r, err := repo.New(cctx.String("repo"))
+		if err != nil {
+			return nil
+		}
+		return r.Init()
+	},
 }
 
 var runCmd = &cli.Command{
@@ -55,11 +74,6 @@ var runCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "listen",
 			Value: "0.0.0.0:6788",
-		},
-		&cli.StringFlag{
-			Name:  "config",
-			Value: "./config.json",
-			Usage: "specify config file path",
 		},
 		&cli.BoolFlag{
 			Name:  "debug",
@@ -81,10 +95,6 @@ var runCmd = &cli.Command{
 		log.Info("starting lotus pilot...")
 
 		ctx := cliutil.ReqContext(cctx)
-		conf, err := config.LoadConfig(cctx.String("config"))
-		if err != nil {
-			return err
-		}
 
 		exporter, err := prometheus.NewExporter(prometheus.Options{
 			Namespace: "lotuspilot",
@@ -104,7 +114,16 @@ var runCmd = &cli.Command{
 		}
 		stats.Record(ctx, metrics.Info.M(1))
 
-		miner, err := miner.NewMiner(ctx, conf)
+		r, err := repo.New(cctx.String("repo"))
+		if err != nil {
+			return nil
+		}
+		r.Init()
+		if err != nil {
+			return nil
+		}
+
+		miner, err := miner.NewMiner(ctx, r)
 		if err != nil {
 			return err
 		}

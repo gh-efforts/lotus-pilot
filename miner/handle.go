@@ -84,7 +84,7 @@ func (m *Miner) addHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = createScript(mi.address.String(), mi.token, mi.size)
+	err = m.repo.CreateScript(mi.address.String(), mi.token, mi.size)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -104,7 +104,7 @@ func (m *Miner) removeHandle(w http.ResponseWriter, r *http.Request) {
 
 	m.remove(maddr)
 
-	err = os.Remove(fmt.Sprintf("%s/%s.sh", SCRIPTS_PATH, maddr.String()))
+	err = os.Remove(fmt.Sprintf("%s/%s.sh", m.repo.ScriptsPath(), maddr.String()))
 	if err != nil {
 		log.Error(err)
 	}

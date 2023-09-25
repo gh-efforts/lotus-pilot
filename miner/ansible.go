@@ -4,58 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"text/template"
 
 	"github.com/apenella/go-ansible/pkg/adhoc"
-	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/gh-efforts/lotus-pilot/build"
 )
 
 //TODO: 执行ansible命令设置超时时间，防止worker网络问题一直卡那
-
-const SCRIPTS_PATH = "./scripts"
-
-type MinerParse struct {
-	MinerID      string
-	MinerAPIInfo string
-}
-
-func createScript(miner, token string, size abi.SectorSize) error {
-	var t *template.Template
-	var err error
-
-	mp := MinerParse{
-		MinerID:      miner,
-		MinerAPIInfo: token,
-	}
-
-	if size == 68719476736 {
-		t, err = template.ParseFiles("./template/worker64G.tmpl")
-		if err != nil {
-			return err
-		}
-	} else {
-		t, err = template.ParseFiles("./template/worker32G.tmpl")
-		if err != nil {
-			return err
-		}
-	}
-
-	f, err := os.Create(fmt.Sprintf("%s/%s.sh", SCRIPTS_PATH, miner))
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	err = t.Execute(f, mp)
-	if err != nil {
-		return err
-	}
-
-	log.Infof("create script: %s", fmt.Sprintf("%s/%s.sh", SCRIPTS_PATH, miner))
-
-	return nil
-}
 
 func disableAPCmd(ctx context.Context, hostname, miner string) error {
 	if build.AnsibleTest {
@@ -84,12 +38,12 @@ func disableAPCmd(ctx context.Context, hostname, miner string) error {
 	return nil
 }
 
-func enableAPCmd(ctx context.Context, hostname, from string) error {
+func enableAPCmd(ctx context.Context, hostname, miner string) error {
 	if build.AnsibleTest {
 		log.Debug("enableAPCmd test")
 		return nil
 	}
-	arg := fmt.Sprintf("lotus-worker --worker-repo=%s tasks enable AP", workerRepo(from))
+	arg := fmt.Sprintf("lotus-worker --worker-repo=%s tasks enable AP", workerRepo(miner))
 
 	ansibleAdhocOptions := &adhoc.AnsibleAdhocOptions{
 		ModuleName: "shell",
@@ -111,12 +65,12 @@ func enableAPCmd(ctx context.Context, hostname, from string) error {
 	return nil
 }
 
-func copyScriptCmd(ctx context.Context, hostname, to string, token string, size abi.SectorSize) error {
+func copyScriptCmd(ctx context.Context, hostname, to, scriptsPath string) error {
 	if build.AnsibleTest {
 		log.Debug("copyScriptCmd test")
 		return nil
 	}
-	src := fmt.Sprintf("%s/%s.sh", SCRIPTS_PATH, to)
+	src := fmt.Sprintf("%s/%s.sh", scriptsPath, to)
 	dest := fmt.Sprintf("/root/%s.sh", to)
 
 	if _, err := os.Stat(src); err != nil {
@@ -144,12 +98,12 @@ func copyScriptCmd(ctx context.Context, hostname, to string, token string, size 
 	return nil
 }
 
-func workerRunCmd(ctx context.Context, hostname, to string, token string, size abi.SectorSize) error {
+func workerRunCmd(ctx context.Context, hostname, to, scriptsPath string) error {
 	if build.AnsibleTest {
 		log.Debug("workerRunCmd test")
 		return nil
 	}
-	err := copyScriptCmd(ctx, hostname, to, token, size)
+	err := copyScriptCmd(ctx, hostname, to, scriptsPath)
 	if err != nil {
 		return err
 	}

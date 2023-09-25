@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/gh-efforts/lotus-pilot/config"
+	"github.com/gh-efforts/lotus-pilot/repo/config"
 )
 
 func TestConfig(t *testing.T) {

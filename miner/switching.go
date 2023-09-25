@@ -210,7 +210,7 @@ func (m *Miner) update(id switchID, wi map[uuid.UUID]workerInfo) (bool, error) {
 				continue
 			}
 			if w.canSwitch() {
-				err := workerRunCmd(m.ctx, w.hostname, ss.req.to.String(), ss.token, ss.size)
+				err := workerRunCmd(m.ctx, w.hostname, ss.req.to.String(), m.repo.ScriptsPath())
 				if err != nil {
 					log.Errorf("workerRunCmd", err.Error())
 					ws.updateErr(err.Error())
