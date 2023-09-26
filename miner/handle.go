@@ -11,6 +11,10 @@ import (
 	"github.com/google/uuid"
 )
 
+type MinerAPI struct {
+	Miner string         `json:"miner"`
+	API   config.APIInfo `json:"api"`
+}
 type SwitchRequest struct {
 	From      string   `json:"from"`
 	To        string   `json:"to"`

@@ -1,10 +1,28 @@
 # lotus-pilot
 多个miner封存时，自动切换worker到指定miner
 ## 部署
+编译
 ```bash
 git clone https://github.com/gh-efforts/lotus-pilot.git
 cd lotus-pilot
 make
+```
+初始化
+```bash
+./lotus-pilot init
+
+➜  ~ tree .lotuspilot
+.lotuspilot
+├── config.json
+├── scripts
+│   └── f017387.sh
+├── state
+└── template
+    ├── worker32G.tmpl
+    └── worker64G.tmpl
+```
+运行
+```bash
 ./lotus-pilot run --listen 0.0.0.0:6788 --debug
 ```
 ## 配置
@@ -45,11 +63,11 @@ OPTIONS:
    --help, -h       show help
 ```
 pilot 启动后会从 config 配置文件获取 miner 信息，并连接到 miner 。  
-并根据 template 目录下的模版文件以及 miner 信息自动生成 worker 的启动脚本放在scripts目录下。  
-启动后可以通过命令对miner进行增删改查，增加 miner 时会自动生成对应的 worker 启动脚本。  
+并根据 .lotuspilot/template 目录下的模版文件以及 miner 信息自动生成 worker 的启动脚本放在./lotuspilot/scripts目录下。  
+启动后可以通过命令对miner进行增删改查，增加 miner 时会自动生成对应的 worker 启动脚本，同时更新 config 配置文件。   
 
 ### script manage
-修改 template 目录下的模版文件    
+修改 .lotuspilot/template 目录下的模版文件    
 为指定 miner 生成 worker 启动脚本：`lotus-pilot script create minerID`    
 为所有 miner 生成 worker 启动脚本：`lotus-pilot script create all `  
 
@@ -88,3 +106,13 @@ hostname: DCZ-2007FD208U36-L06-W07
 state: workerStoped                                                                                                                                                             
 try: 0  
 ```
+切换发起成功后（根据 switchID 查看状态是 Accepted）  
+pilot 会定时（config interval）检查 worker 的状态，满足切换条件时进行切换，满足停止条件时则停止原 worker  
+
+worker切换条件：
+- sealing job 中这台 worker 没有 AP PC1 PC2 任务
+- miner 调度队列中，这台 worker 没有 PC1 PC2任务  
+
+worker stop 条件：
+- sealing job 中这台 worker 没有任何任务
+- miner索引中，这台 worker 没有 sector

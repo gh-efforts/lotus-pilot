@@ -19,11 +19,6 @@ import (
 
 var log = logging.Logger("pilot/miner")
 
-type MinerAPI struct {
-	Miner string         `json:"miner"`
-	API   config.APIInfo `json:"api"`
-}
-
 type MinerInfo struct {
 	api     v0api.StorageMiner
 	closer  jsonrpc.ClientCloser
