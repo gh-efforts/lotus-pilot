@@ -191,3 +191,40 @@ func (r *Repo) CreateScript(miner, token string, size abi.SectorSize) error {
 	log.Infof("create script: %s", name)
 	return nil
 }
+
+func (r *Repo) RemoveScript(miner string) error {
+	name := filepath.Join(r.ScriptsPath(), miner+".sh")
+	err := os.Remove(name)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("remove script: %s", name)
+	return nil
+}
+
+// TODO: support concurrency
+func (r *Repo) UpdateConfig(miner string, api config.APIInfo) error {
+	c, err := config.LoadConfig(r.configPath)
+	if err != nil {
+		return err
+	}
+
+	if api == (config.APIInfo{}) {
+		delete(c.Miners, miner)
+	} else {
+		c.Miners[miner] = api
+	}
+
+	data, err := json.MarshalIndent(c, "", "\t")
+	if err != nil {
+		return err
+	}
+
+	err = os.WriteFile(r.configPath, data, 0666)
+	if err != nil {
+		return err
+	}
+	log.Infof("update config: %s", miner)
+	return nil
+}

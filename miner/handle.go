@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/gh-efforts/lotus-pilot/repo/config"
 	"github.com/google/uuid"
 )
 
@@ -90,6 +90,12 @@ func (m *Miner) addHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = m.repo.UpdateConfig(mi.address.String(), minerAPI.API)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	m.add(mi)
 }
 
@@ -102,12 +108,24 @@ func (m *Miner) removeHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m.remove(maddr)
-
-	err = os.Remove(fmt.Sprintf("%s/%s.sh", m.repo.ScriptsPath(), maddr.String()))
-	if err != nil {
-		log.Error(err)
+	if !m.has(maddr) {
+		http.Error(w, "miner not found", http.StatusBadRequest)
+		return
 	}
+
+	err = m.repo.UpdateConfig(maddr.String(), config.APIInfo{})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = m.repo.RemoveScript(maddr.String())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	m.remove(maddr)
 }
 
 func (m *Miner) listHandle(w http.ResponseWriter, r *http.Request) {

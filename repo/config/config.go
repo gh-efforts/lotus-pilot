@@ -61,7 +61,6 @@ func LoadConfig(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Info("load json config success")
 
 	return &c, nil
 }
