@@ -16,9 +16,8 @@ mkdir -p $base_dir
 repo_dir=$base_dir/.lotusworker
 log_dir=$base_dir/log
 tmp_dir=$base_dir/tmp
-parent_cache_dir=$base_dir/parent_cache
 
-mkdir -p $repo_dir $log_dir $tmp_dir $parent_cache_dir
+mkdir -p $repo_dir $log_dir $tmp_dir
 
 # miner 的api信息，参考miner部署环节
 export MINER_API_INFO={{.MinerAPIInfo}}
@@ -47,7 +46,8 @@ export FIL_PROOFS_USE_MULTICORE_SDR=1
 export FIL_PROOFS_MULTICORE_SDR_PRODUCERS=3
 export FIL_PROOFS_MAXIMIZE_CACHING=1
 export FIL_PROOFS_LAYER_CACHE_SIZE=64
-export FIL_PROOFS_PARENT_CACHE=$parent_cache_dir
+mkdir -p /media/nvme/parent_cache
+export FIL_PROOFS_PARENT_CACHE=/media/nvme/parent_cache
 # 使用独立的程序做P1,P2任务， gh的代码需要开启，不开启可能封存有异常
 export P1_SEPARATE_PROCESS=1
 export P2_SEPARATE_PROCESS=1
