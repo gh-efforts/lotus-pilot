@@ -14,6 +14,7 @@ import (
 	"github.com/filecoin-project/lotus/api/v0api"
 	"github.com/gh-efforts/lotus-pilot/repo"
 	"github.com/gh-efforts/lotus-pilot/repo/config"
+	"github.com/google/uuid"
 	logging "github.com/ipfs/go-log/v2"
 )
 
@@ -34,9 +35,9 @@ type Miner struct {
 	lk     sync.RWMutex
 	miners map[address.Address]MinerInfo
 
-	ch      chan switchRequestResponse
+	//TODO: use datastore replace map
 	swLk    sync.RWMutex
-	switchs map[switchID]*switchState
+	switchs map[uuid.UUID]*SwitchState
 
 	repo *repo.Repo
 }
@@ -65,12 +66,25 @@ func NewMiner(ctx context.Context, r *repo.Repo) (*Miner, error) {
 		ctx:      ctx,
 		interval: time.Duration(conf.Interval),
 		miners:   miners,
-		ch:       make(chan switchRequestResponse, 20),
-		switchs:  make(map[switchID]*switchState),
+		switchs:  make(map[uuid.UUID]*SwitchState),
 		repo:     r,
 	}
 	m.run()
 	return m, nil
+}
+
+func (m *Miner) run() {
+	go func() {
+		t := time.NewTicker(m.interval)
+		for {
+			select {
+			case <-t.C:
+				m.process()
+			case <-m.ctx.Done():
+				return
+			}
+		}
+	}()
 }
 
 func (m *Miner) add(mi MinerInfo) {
@@ -78,17 +92,6 @@ func (m *Miner) add(mi MinerInfo) {
 	defer m.lk.Unlock()
 
 	m.miners[mi.address] = mi
-}
-
-func (m *Miner) getMiner(ma address.Address) (MinerInfo, error) {
-	m.lk.RLock()
-	defer m.lk.RUnlock()
-
-	mi, ok := m.miners[ma]
-	if !ok {
-		return MinerInfo{}, fmt.Errorf("not found miner: %s", ma)
-	}
-	return mi, nil
 }
 
 func (m *Miner) remove(ma address.Address) {

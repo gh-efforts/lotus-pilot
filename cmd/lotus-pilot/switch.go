@@ -3,12 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/gh-efforts/lotus-pilot/miner"
+	"github.com/google/uuid"
 	"github.com/urfave/cli/v2"
 )
 
@@ -51,11 +52,28 @@ var switchNewCmd = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
+		from, err := address.NewFromString(cctx.String("from"))
+		if err != nil {
+			return err
+		}
+		to, err := address.NewFromString(cctx.String("to"))
+		if err != nil {
+			return err
+		}
+		worker := []uuid.UUID{}
+		for _, w := range cctx.StringSlice("worker") {
+			i, err := uuid.Parse(w)
+			if err != nil {
+				return err
+			}
+			worker = append(worker, i)
+		}
+
 		req := miner.SwitchRequest{
-			From:      cctx.String("from"),
-			To:        cctx.String("to"),
+			From:      from,
+			To:        to,
 			Count:     cctx.Int("count"),
-			Worker:    cctx.StringSlice("worker"),
+			Worker:    worker,
 			DisableAP: cctx.Bool("disableAP"),
 		}
 
@@ -79,18 +97,13 @@ var switchNewCmd = &cli.Command{
 			return fmt.Errorf("status: %s msg: %s", resp.Status, string(r))
 		}
 
-		var srsp miner.SwitchResponse
-		err = json.NewDecoder(resp.Body).Decode(&srsp)
+		var ss miner.SwitchState
+		err = json.NewDecoder(resp.Body).Decode(&ss)
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("switchID: %s\n", srsp.ID)
-		fmt.Println("worker:")
-		for _, w := range srsp.Worker {
-			fmt.Println(w.WorkerID, w.Hostname)
-		}
-
+		printSwitchState(ss)
 		return nil
 	},
 }
@@ -104,9 +117,9 @@ var switchGetCmd = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
-		id := cctx.String("switch-id")
-		if id == "" {
-			return errors.New("switch-id is empty")
+		id, err := uuid.Parse(cctx.String("switch-id"))
+		if err != nil {
+			return err
 		}
 
 		url := fmt.Sprintf("http://%s/switch/get/%s", cctx.String("connect"), id)
@@ -130,24 +143,7 @@ var switchGetCmd = &cli.Command{
 			return err
 		}
 
-		fmt.Printf("switchID: %s\n", ss.ID)
-		fmt.Printf("state: %s\n", ss.State)
-		if ss.ErrMsg != "" {
-			fmt.Printf("errMsg: %s\n", ss.ErrMsg)
-		}
-		fmt.Printf("switch request %+v\n\n", ss.Req)
-
-		for _, w := range ss.Worker {
-			fmt.Printf("workerID: %s\n", w.WorkerID)
-			fmt.Printf("hostname: %s\n", w.Hostname)
-			fmt.Printf("state: %s\n", w.State)
-			if w.ErrMsg != "" {
-				fmt.Printf("errMsg: %s\n", w.ErrMsg)
-			}
-			fmt.Printf("try: %d\n\n", w.Try)
-		}
-		//fmt.Printf("%+v", ss)
-
+		printSwitchState(ss)
 		return nil
 	},
 }
@@ -161,9 +157,9 @@ var switchCancelCmd = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
-		id := cctx.String("switch-id")
-		if id == "" {
-			return errors.New("switch-id is empty")
+		id, err := uuid.Parse(cctx.String("switch-id"))
+		if err != nil {
+			return err
 		}
 
 		url := fmt.Sprintf("http://%s/switch/cancel/%s", cctx.String("connect"), id)
@@ -193,9 +189,9 @@ var switchRemoveCmd = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
-		id := cctx.String("switch-id")
-		if id == "" {
-			return errors.New("switch-id is empty")
+		id, err := uuid.Parse(cctx.String("switch-id"))
+		if err != nil {
+			return err
 		}
 
 		url := fmt.Sprintf("http://%s/switch/remove/%s", cctx.String("connect"), id)
@@ -237,4 +233,23 @@ var switchListCmd = &cli.Command{
 		fmt.Println(string(r))
 		return nil
 	},
+}
+
+func printSwitchState(ss miner.SwitchState) {
+	fmt.Printf("switchID: %s\n", ss.ID)
+	fmt.Printf("state: %s\n", ss.State)
+	if ss.ErrMsg != "" {
+		fmt.Printf("errMsg: %s\n", ss.ErrMsg)
+	}
+	fmt.Printf("switch request %+v\n\n", ss.Req)
+
+	for _, w := range ss.Worker {
+		fmt.Printf("workerID: %s\n", w.WorkerID)
+		fmt.Printf("hostname: %s\n", w.Hostname)
+		fmt.Printf("state: %s\n", w.State)
+		if w.ErrMsg != "" {
+			fmt.Printf("errMsg: %s\n", w.ErrMsg)
+		}
+		fmt.Printf("try: %d\n\n", w.Try)
+	}
 }

@@ -15,38 +15,6 @@ type MinerAPI struct {
 	Miner string         `json:"miner"`
 	API   config.APIInfo `json:"api"`
 }
-type SwitchRequest struct {
-	From      string   `json:"from"`
-	To        string   `json:"to"`
-	Count     int      `json:"count"`
-	Worker    []string `json:"worker"`
-	DisableAP bool     `json:"disableAP"`
-}
-
-type Worker struct {
-	WorkerID string `json:"workerID"`
-	Hostname string `json:"hostname"`
-}
-type SwitchResponse struct {
-	ID     string   `json:"id"`
-	Worker []Worker `json:"worker"`
-}
-
-type SwitchState struct {
-	ID     string        `json:"id"`
-	State  string        `json:"state"`
-	ErrMsg string        `json:"errMsg"`
-	Req    SwitchRequest `json:"req"`
-	Worker []WorkerState `json:"worker"`
-}
-
-type WorkerState struct {
-	WorkerID string `json:"workerID"`
-	Hostname string `json:"hostname"`
-	State    string `json:"state"`
-	ErrMsg   string `json:"errMsg"`
-	Try      int    `json:"try"`
-}
 
 func (m *Miner) Handle() {
 	http.HandleFunc("/miner/add", middlewareTimer(m.addHandle))
@@ -140,60 +108,20 @@ func (m *Miner) listHandle(w http.ResponseWriter, r *http.Request) {
 
 func (m *Miner) switchHandle(w http.ResponseWriter, r *http.Request) {
 	log.Debugw("switchHandle", "path", r.URL.Path)
-	var sr SwitchRequest
-	err := json.NewDecoder(r.Body).Decode(&sr)
+	var req SwitchRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	from, err := address.NewFromString(sr.From)
+	ss, err := m.newSwitch(r.Context(), req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	to, err := address.NewFromString(sr.To)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	worker := []uuid.UUID{}
-	for _, ww := range sr.Worker {
-		i, err := uuid.Parse(ww)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		worker = append(worker, i)
-	}
 
-	req := &switchRequest{
-		from:      from,
-		to:        to,
-		count:     sr.Count,
-		disableAP: sr.DisableAP,
-		worker:    worker,
-	}
-
-	rsp := m.sendSwitch(req)
-	if rsp.err != nil {
-		http.Error(w, rsp.err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	ws := []Worker{}
-	for id, s := range rsp.worker {
-		ws = append(ws, Worker{
-			WorkerID: id.String(),
-			Hostname: s.hostname,
-		})
-
-	}
-	srsp := SwitchResponse{
-		ID:     rsp.id.String(),
-		Worker: ws,
-	}
-	body, err := json.Marshal(srsp)
+	body, err := json.Marshal(ss)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -210,8 +138,7 @@ func (m *Miner) getSwitchHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ss := m.getSwitch(switchID(id))
-	body, err := json.Marshal(&ss)
+	body, err := json.Marshal(m.getSwitch(id))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -228,7 +155,7 @@ func (m *Miner) cancelSwitchHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m.cancelSwitch(switchID(id))
+	m.cancelSwitch(id)
 }
 
 func (m *Miner) removeSwitchHandle(w http.ResponseWriter, r *http.Request) {
@@ -240,7 +167,7 @@ func (m *Miner) removeSwitchHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m.removeSwitch(switchID(id))
+	m.removeSwitch(id)
 }
 
 func (m *Miner) listSwitchHandle(w http.ResponseWriter, r *http.Request) {
