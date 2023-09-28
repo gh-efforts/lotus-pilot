@@ -6,11 +6,7 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	logging "github.com/ipfs/go-log/v2"
 )
-
-var log = logging.Logger("pilot/config")
 
 type Duration time.Duration
 
@@ -76,8 +72,8 @@ func DefaultConfig() *Config {
 	}
 
 	miners := make(map[string]APIInfo)
-	miners["t017387"] = miner
-	miners["t028064"] = miner64
+	miners["f017387"] = miner
+	miners["f028064"] = miner64
 
 	return &Config{
 		Interval: Duration(time.Minute),

@@ -1,3 +1,5 @@
 package build
 
-var AnsibleTest = false
+var SkipAnsible = false
+
+var SkipSchedDiag = false

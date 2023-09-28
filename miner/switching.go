@@ -1,323 +1,263 @@
 package miner
 
 import (
-	"fmt"
-	"time"
+	"context"
 
 	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/storage/sealer/sealtasks"
 	"github.com/google/uuid"
 )
 
-type stateSwitch int
+type StateSwitch int
 
 const (
-	stateAccepted  stateSwitch = iota
-	stateSwitching             //waiting to switch
-	stateSwitched
-	stateCanceled
-	stateError
+	StateSwitching StateSwitch = iota
+	StateComplete
+	StateCanceled
+	StateError
 )
 
-var stateSwitchNames = map[stateSwitch]string{
-	stateAccepted:  "accepted",
-	stateSwitching: "switching",
-	stateSwitched:  "switched",
-	stateCanceled:  "canceled",
-	stateError:     "error",
+var stateSwitchNames = map[StateSwitch]string{
+	StateSwitching: "switching",
+	StateComplete:  "complete",
+	StateCanceled:  "canceled",
+	StateError:     "error",
 }
 
-func (s stateSwitch) String() string {
+func (s StateSwitch) String() string {
 	return stateSwitchNames[s]
 }
 
-type switchID uuid.UUID
-
-func (s switchID) String() string {
-	return uuid.UUID(s).String()
-}
-
-type switchRequest struct {
-	from  address.Address
-	to    address.Address
-	count int
+type SwitchRequest struct {
+	From  address.Address `json:"from"`
+	To    address.Address `json:"to"`
+	Count int             `json:"count"`
 	//指定要切换的worker列表，如果为空，则由pilot选择
-	worker []uuid.UUID
+	Worker []uuid.UUID `json:"worker"`
 	//切换前是否禁止AP任务，如果不禁止，则fromMiner的任务全部完成后再切到toMiner
-	disableAP bool
+	DisableAP bool `json:"disableAP"`
 }
 
-type switchRequestResponse struct {
-	rsp chan switchResponse
-	req *switchRequest
+type SwitchState struct {
+	ID     uuid.UUID                  `json:"id"`
+	State  StateSwitch                `json:"state"`
+	ErrMsg string                     `json:"errMsg"`
+	Req    SwitchRequest              `json:"req"`
+	Worker map[uuid.UUID]*WorkerState `json:"worker"`
 }
 
-type switchResponse struct {
-	id     switchID
-	worker map[uuid.UUID]*workerState //hostname
-	err    error
-}
-
-type switchState struct {
-	id     switchID
-	state  stateSwitch
-	errMsg string
-
-	req    *switchRequest
-	worker map[uuid.UUID]*workerState //workerID
-
-	//to miner info
-	size  abi.SectorSize
-	token string
-
-	cancel chan struct{}
-}
-
-func (m *Miner) sendSwitch(req *switchRequest) switchResponse {
-	srr := switchRequestResponse{
-		rsp: make(chan switchResponse),
-		req: req,
-	}
-
-	m.ch <- srr
-
-	return <-srr.rsp
-}
-
-func (m *Miner) run() {
-	go func() {
-		for {
-			select {
-			case srr := <-m.ch:
-				go m.process(srr)
-			case <-m.ctx.Done():
-				return
-			}
-		}
-	}()
-}
-
-func (m *Miner) process(srr switchRequestResponse) {
-	mi, err := m.getMiner(srr.req.to)
-	if err != nil {
-		srr.rsp <- switchResponse{err: err}
-		return
-	}
-
-	worker, err := m.workerPick(srr.req)
-	if err != nil {
-		srr.rsp <- switchResponse{err: err}
-		return
-	}
-
-	ss := &switchState{
-		id:     switchID(uuid.New()),
-		state:  stateAccepted,
-		req:    srr.req,
-		worker: worker,
-		size:   mi.size,
-		token:  mi.token,
-		cancel: make(chan struct{}),
-	}
-	srr.rsp <- switchResponse{id: ss.id, worker: worker, err: nil}
-	m.addSwitch(ss)
-
-	if err := m.disableAP(ss.id); err != nil {
-		log.Error(err)
-		return
-	}
-
-	t := time.NewTicker(m.interval)
-	for {
-		select {
-		case <-t.C:
-			wi, err := m.getWorkerInfo(ss.req.from)
+func (s *SwitchState) disableAP(ctx context.Context) {
+	for _, ws := range s.Worker {
+		if s.Req.DisableAP {
+			err := disableAPCmd(ctx, ws.Hostname, s.Req.From.String())
 			if err != nil {
-				log.Errorf("getWorkerInfo: %s", err)
+				log.Errorf("disableAPCmd", err.Error())
+				ws.updateErr(err.Error())
 				continue
 			}
-			complete, err := m.update(ss.id, wi)
-			if err != nil {
-				log.Errorf("update: %s", err)
-				continue
-			}
-			if complete {
-				log.Infof("switchID: %s complete", ss.id)
-				return
-			}
-		case <-ss.cancel:
-			log.Infof("switch ID: %s canceled", ss.id)
-			return
-		case <-m.ctx.Done():
-			return
+			ws.State = StateWorkerDisableAPConfirming
+		} else {
+			ws.State = StateWorkerSwitchWaiting
 		}
 	}
 }
 
-func (m *Miner) disableAP(id switchID) error {
-	m.swLk.Lock()
-	defer m.swLk.Unlock()
-
-	ss, ok := m.switchs[id]
-	if !ok {
-		return fmt.Errorf("switchID: %s not found", id)
-	}
-
-	for _, ws := range ss.worker {
-		if ss.req.disableAP {
-			err := disableAPCmd(m.ctx, ws.hostname, ss.req.from.String())
-			if err != nil {
-				log.Errorw("disable ap cmd", "err", err.Error())
-				ws.try += 1
-				ws.errMsg = err.Error()
-				continue
-			}
-		}
-		ws.state = stateWorkerSwitching
-	}
-
-	ss.state = stateSwitching
-	return nil
-}
-
-func (m *Miner) update(id switchID, wi map[uuid.UUID]workerInfo) (bool, error) {
-	m.swLk.Lock()
-	defer m.swLk.Unlock()
-
-	ss, ok := m.switchs[id]
-	if !ok {
-		return false, fmt.Errorf("switchID: %s not found", id)
-	}
-
+func (s *SwitchState) update(m *Miner) {
 	workerCompleted := 0
-	for wid, ws := range ss.worker {
-		switch ws.state {
-		case stateWorkerPicked:
-			if ss.req.disableAP {
-				err := disableAPCmd(m.ctx, ws.hostname, ss.req.from.String())
+	for wid, ws := range s.Worker {
+		switch ws.State {
+		case StateWorkerPicked:
+			if s.Req.DisableAP {
+				err := disableAPCmd(m.ctx, ws.Hostname, s.Req.From.String())
 				if err != nil {
 					log.Errorf("disableAPCmd", err.Error())
 					ws.updateErr(err.Error())
 					continue
 				}
+				ws.State = StateWorkerDisableAPConfirming
+			} else {
+				ws.State = StateWorkerSwitchWaiting
 			}
-			//TODO: check disableAP success or not
-			ws.state = stateWorkerSwitching
-		case stateWorkerSwitching:
-			w, ok := wi[wid]
+		case StateWorkerDisableAPConfirming:
+			worker, err := m.getWorkerStats(s.Req.From)
+			if err != nil {
+				log.Errorf("miner: %s getWorkerStats: %s", s.Req.From, err)
+				continue
+			}
+			w, ok := worker[wid]
+			if !ok {
+				log.Errorf("not found workerID: %s", wid)
+				continue
+			}
+			hasAP := false
+			for _, t := range w.Tasks {
+				if t == sealtasks.TTAddPiece {
+					hasAP = true
+				}
+			}
+			if hasAP {
+				log.Infow("disableAP retry", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
+				err := disableAPCmd(m.ctx, ws.Hostname, s.Req.From.String())
+				if err != nil {
+					log.Errorf("disableAPCmd", err.Error())
+					ws.updateErr(err.Error())
+					continue
+				}
+			} else {
+				log.Infow("disableAP success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
+				ws.State = StateWorkerSwitchWaiting
+			}
+		case StateWorkerSwitchWaiting:
+			worker, err := m.getWorkerInfo(s.Req.From)
+			if err != nil {
+				log.Errorf("miner: %s getWorkerInfo: %s", s.Req.From, err)
+				continue
+			}
+			w, ok := worker[wid]
 			if !ok {
 				log.Errorf("not found workerID: %s", wid)
 				continue
 			}
 			if w.canSwitch() {
-				err := workerRunCmd(m.ctx, w.hostname, ss.req.to.String(), m.repo.ScriptsPath())
+				err := workerRunCmd(m.ctx, w.hostname, s.Req.To.String(), m.repo.ScriptsPath())
 				if err != nil {
 					log.Errorf("workerRunCmd", err.Error())
 					ws.updateErr(err.Error())
 					continue
 				}
-				//TODO: check worker run success or not
-				ws.state = stateWorkerSwithed
+				ws.State = StateWorkerSwitchConfirming
 			}
-		case stateWorkerSwithed:
-			w, ok := wi[wid]
+		case StateWorkerSwitchConfirming:
+			worker, err := m.getWorkerStats(s.Req.To)
+			if err != nil {
+				log.Errorf("miner: %s getWorkerStats: %s", s.Req.From, err)
+				continue
+			}
+			for _, w := range worker {
+				if w.Info.Hostname == ws.Hostname {
+					log.Infow("switch success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
+					ws.State = StateWorkerStopWaiting
+					continue
+				}
+			}
+			log.Warnw("switch failed", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
+			//TODO: re-switch
+		case StateWorkerStopWaiting:
+			worker, err := m.getWorkerInfo(s.Req.From)
+			if err != nil {
+				log.Errorf("miner: %s getWorkerInfo: %s", s.Req.From, err)
+				continue
+			}
+			w, ok := worker[wid]
 			if !ok {
 				log.Errorf("not found workerID: %s", wid)
 				continue
 			}
 			if w.canStop() {
-				err := workerStopCmd(m.ctx, ws.hostname, ss.req.from.String())
+				err := workerStopCmd(m.ctx, ws.Hostname, s.Req.From.String())
 				if err != nil {
 					log.Errorf("workerStopCmd", err.Error())
 					ws.updateErr(err.Error())
 					continue
 				}
-				//TODO: check worker stop success or not
-				ws.state = stateWorkerStoped
+				ws.State = StateWorkerStopConfirming
 			}
-		case stateWorkerStoped:
+		case StateWorkerStopConfirming:
+			worker, err := m.getWorkerStats(s.Req.To)
+			if err != nil {
+				log.Errorf("miner: %s getWorkerStats: %s", s.Req.From, err)
+				continue
+			}
+			if _, ok := worker[wid]; ok {
+				log.Infow("stop retry", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
+				err := workerStopCmd(m.ctx, ws.Hostname, s.Req.From.String())
+				if err != nil {
+					log.Errorf("workerStopCmd", err.Error())
+					ws.updateErr(err.Error())
+					continue
+				}
+			}
+			log.Infow("stop success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
+			ws.State = StateWorkerComplete
+		case StateWorkerComplete:
 			fallthrough
-		case stateWorkerError:
+		case StateWorkerError:
 			workerCompleted += 1
 		default:
-			log.Warnw("switch state", "id", id, "workerID", ws.workerID, "worker state", ws.state)
+			log.Warnw("switch state", "id", s.ID, "workerID", ws.WorkerID, "worker state", ws.State)
 		}
 	}
 
-	if workerCompleted == len(ss.worker) {
-		ss.state = stateSwitched
-		return true, nil
+	if workerCompleted == len(s.Worker) {
+		s.State = StateComplete
+		log.Infof("switchID: %s complete", s.ID)
 	}
-
-	return false, nil
 }
 
-func (m *Miner) addSwitch(ss *switchState) {
+func (m *Miner) newSwitch(ctx context.Context, req SwitchRequest) (*SwitchState, error) {
+	worker, err := m.workerPick(req)
+	if err != nil {
+		return nil, err
+	}
+
+	ss := &SwitchState{
+		ID:     uuid.New(),
+		State:  StateSwitching,
+		Req:    req,
+		Worker: worker,
+	}
+
+	ss.disableAP(ctx)
+
+	m.addSwitch(ss)
+	log.Infof("new switch: %s", ss.ID)
+	return ss, nil
+}
+
+func (m *Miner) process() {
 	m.swLk.Lock()
 	defer m.swLk.Unlock()
 
-	m.switchs[ss.id] = ss
+	for _, ss := range m.switchs {
+		if ss.State == StateCanceled || ss.State == StateComplete {
+			continue
+		}
+
+		ss.update(m)
+	}
 }
 
-func (m *Miner) cancelSwitch(id switchID) {
+func (m *Miner) addSwitch(ss *SwitchState) {
+	m.swLk.Lock()
+	defer m.swLk.Unlock()
+
+	m.switchs[ss.ID] = ss
+}
+
+func (m *Miner) cancelSwitch(id uuid.UUID) {
 	m.swLk.Lock()
 	defer m.swLk.Unlock()
 
 	ss, ok := m.switchs[id]
-	if ok {
-		ss.state = stateCanceled
-		close(ss.cancel)
+	if ok && ss.State == StateSwitching {
+		ss.State = StateCanceled
+		log.Infof("switch: %s canceled", ss.ID)
 	}
 }
 
-func (m *Miner) removeSwitch(id switchID) {
+func (m *Miner) removeSwitch(id uuid.UUID) {
 	m.swLk.Lock()
 	defer m.swLk.Unlock()
 
 	delete(m.switchs, id)
+	log.Infof("switch: %s deleted", id)
 }
 
-func (m *Miner) getSwitch(id switchID) SwitchState {
+func (m *Miner) getSwitch(id uuid.UUID) *SwitchState {
 	m.swLk.RLock()
 	defer m.swLk.RUnlock()
 
-	ss, ok := m.switchs[id]
-	if !ok {
-		return SwitchState{}
-	}
-
-	worker := []string{}
-	for _, w := range ss.req.worker {
-		worker = append(worker, w.String())
-	}
-	req := SwitchRequest{
-		From:      ss.req.from.String(),
-		To:        ss.req.to.String(),
-		Count:     ss.req.count,
-		Worker:    worker,
-		DisableAP: ss.req.disableAP,
-	}
-
-	ws := []WorkerState{}
-	for _, w := range ss.worker {
-		ws = append(ws, WorkerState{
-			WorkerID: w.workerID.String(),
-			Hostname: w.hostname,
-			State:    w.state.String(),
-			ErrMsg:   w.errMsg,
-			Try:      w.try,
-		})
-	}
-
-	ret := SwitchState{
-		ID:     ss.id.String(),
-		State:  ss.state.String(),
-		ErrMsg: ss.errMsg,
-		Req:    req,
-		Worker: ws,
-	}
-
-	return ret
+	return m.switchs[id]
 }
 
 func (m *Miner) listSwitch() []string {
@@ -326,7 +266,7 @@ func (m *Miner) listSwitch() []string {
 
 	var out []string
 	for _, s := range m.switchs {
-		out = append(out, s.id.String())
+		out = append(out, s.ID.String())
 	}
 
 	return out
@@ -339,8 +279,8 @@ func (m *Miner) switchingWorkers() map[uuid.UUID]struct{} {
 	out := map[uuid.UUID]struct{}{}
 
 	for _, s := range m.switchs {
-		for w, ws := range s.worker {
-			if ws.state != stateWorkerStoped {
+		for w, ws := range s.Worker {
+			if ws.State != StateWorkerComplete {
 				out[w] = struct{}{}
 			}
 		}

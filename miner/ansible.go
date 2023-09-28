@@ -12,7 +12,7 @@ import (
 //TODO: 执行ansible命令设置超时时间，防止worker网络问题一直卡那
 
 func disableAPCmd(ctx context.Context, hostname, miner string) error {
-	if build.AnsibleTest {
+	if build.SkipAnsible {
 		log.Debug("disableAPCmd test")
 		return nil
 	}
@@ -38,35 +38,8 @@ func disableAPCmd(ctx context.Context, hostname, miner string) error {
 	return nil
 }
 
-func enableAPCmd(ctx context.Context, hostname, miner string) error {
-	if build.AnsibleTest {
-		log.Debug("enableAPCmd test")
-		return nil
-	}
-	arg := fmt.Sprintf("lotus-worker --worker-repo=%s tasks enable AP", workerRepo(miner))
-
-	ansibleAdhocOptions := &adhoc.AnsibleAdhocOptions{
-		ModuleName: "shell",
-		Args:       arg,
-	}
-
-	adhoc := &adhoc.AnsibleAdhocCmd{
-		Pattern: hostname,
-		Options: ansibleAdhocOptions,
-	}
-
-	log.Debugw("enableAPCmd", "Command: ", adhoc.String())
-
-	err := adhoc.Run(ctx)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func copyScriptCmd(ctx context.Context, hostname, to, scriptsPath string) error {
-	if build.AnsibleTest {
+	if build.SkipAnsible {
 		log.Debug("copyScriptCmd test")
 		return nil
 	}
@@ -99,7 +72,7 @@ func copyScriptCmd(ctx context.Context, hostname, to, scriptsPath string) error 
 }
 
 func workerRunCmd(ctx context.Context, hostname, to, scriptsPath string) error {
-	if build.AnsibleTest {
+	if build.SkipAnsible {
 		log.Debug("workerRunCmd test")
 		return nil
 	}
@@ -125,9 +98,6 @@ func workerRunCmd(ctx context.Context, hostname, to, scriptsPath string) error {
 	if err != nil {
 		return err
 	}
-	//TODO: 可能执行失败, 需要检查执行输出是否包含以下信息
-	//[WARNING]: Could not match supplied host pattern, ignoring: DCZ-2007FD101U42-L01-W29
-	//[WARNING]: No hosts matched, nothing to do
 	return nil
 }
 
@@ -136,7 +106,7 @@ func workerRepo(miner string) string {
 }
 
 func workerStopCmd(ctx context.Context, hostname, from string) error {
-	if build.AnsibleTest {
+	if build.SkipAnsible {
 		log.Debug("workerStopCmd test")
 		return nil
 	}

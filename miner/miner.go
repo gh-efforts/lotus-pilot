@@ -14,6 +14,7 @@ import (
 	"github.com/filecoin-project/lotus/api/v0api"
 	"github.com/gh-efforts/lotus-pilot/repo"
 	"github.com/gh-efforts/lotus-pilot/repo/config"
+	"github.com/google/uuid"
 	logging "github.com/ipfs/go-log/v2"
 )
 
@@ -34,11 +35,14 @@ type Miner struct {
 	lk     sync.RWMutex
 	miners map[address.Address]MinerInfo
 
-	ch      chan switchRequestResponse
+	//TODO: use datastore replace map
 	swLk    sync.RWMutex
-	switchs map[switchID]*switchState
+	switchs map[uuid.UUID]*SwitchState
 
 	repo *repo.Repo
+
+	infoCache  map[address.Address]workerInfoCache
+	statsCache map[address.Address]workerStatsCache
 }
 
 func NewMiner(ctx context.Context, r *repo.Repo) (*Miner, error) {
@@ -62,15 +66,30 @@ func NewMiner(ctx context.Context, r *repo.Repo) (*Miner, error) {
 		}
 	}
 	m := &Miner{
-		ctx:      ctx,
-		interval: time.Duration(conf.Interval),
-		miners:   miners,
-		ch:       make(chan switchRequestResponse, 20),
-		switchs:  make(map[switchID]*switchState),
-		repo:     r,
+		ctx:        ctx,
+		interval:   time.Duration(conf.Interval),
+		miners:     miners,
+		switchs:    make(map[uuid.UUID]*SwitchState),
+		repo:       r,
+		infoCache:  make(map[address.Address]workerInfoCache),
+		statsCache: make(map[address.Address]workerStatsCache),
 	}
 	m.run()
 	return m, nil
+}
+
+func (m *Miner) run() {
+	go func() {
+		t := time.NewTicker(m.interval)
+		for {
+			select {
+			case <-t.C:
+				m.process()
+			case <-m.ctx.Done():
+				return
+			}
+		}
+	}()
 }
 
 func (m *Miner) add(mi MinerInfo) {
@@ -78,17 +97,7 @@ func (m *Miner) add(mi MinerInfo) {
 	defer m.lk.Unlock()
 
 	m.miners[mi.address] = mi
-}
-
-func (m *Miner) getMiner(ma address.Address) (MinerInfo, error) {
-	m.lk.RLock()
-	defer m.lk.RUnlock()
-
-	mi, ok := m.miners[ma]
-	if !ok {
-		return MinerInfo{}, fmt.Errorf("not found miner: %s", ma)
-	}
-	return mi, nil
+	log.Infof("add miner: %s", mi.address)
 }
 
 func (m *Miner) remove(ma address.Address) {
@@ -101,6 +110,7 @@ func (m *Miner) remove(ma address.Address) {
 	}
 
 	delete(m.miners, ma)
+	log.Infof("remove miner: %s", ma)
 }
 
 func (m *Miner) list() []string {
