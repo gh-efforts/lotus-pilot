@@ -12,7 +12,7 @@ import (
 //TODO: 执行ansible命令设置超时时间，防止worker网络问题一直卡那
 
 func disableAPCmd(ctx context.Context, hostname, miner string) error {
-	if build.AnsibleTest {
+	if build.SkipAnsible {
 		log.Debug("disableAPCmd test")
 		return nil
 	}
@@ -39,7 +39,7 @@ func disableAPCmd(ctx context.Context, hostname, miner string) error {
 }
 
 func copyScriptCmd(ctx context.Context, hostname, to, scriptsPath string) error {
-	if build.AnsibleTest {
+	if build.SkipAnsible {
 		log.Debug("copyScriptCmd test")
 		return nil
 	}
@@ -72,7 +72,7 @@ func copyScriptCmd(ctx context.Context, hostname, to, scriptsPath string) error 
 }
 
 func workerRunCmd(ctx context.Context, hostname, to, scriptsPath string) error {
-	if build.AnsibleTest {
+	if build.SkipAnsible {
 		log.Debug("workerRunCmd test")
 		return nil
 	}
@@ -106,7 +106,7 @@ func workerRepo(miner string) string {
 }
 
 func workerStopCmd(ctx context.Context, hostname, from string) error {
-	if build.AnsibleTest {
+	if build.SkipAnsible {
 		log.Debug("workerStopCmd test")
 		return nil
 	}

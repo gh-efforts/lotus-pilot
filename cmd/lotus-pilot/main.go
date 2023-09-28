@@ -80,7 +80,11 @@ var runCmd = &cli.Command{
 			Value: false,
 		},
 		&cli.BoolFlag{
-			Name:  "test",
+			Name:  "skip-ansible",
+			Value: false,
+		},
+		&cli.BoolFlag{
+			Name:  "skip-sched",
 			Value: false,
 		},
 	},
@@ -88,8 +92,11 @@ var runCmd = &cli.Command{
 		if cctx.Bool("debug") {
 			logging.SetLogLevelRegex("pilot/*", "DEBUG")
 		}
-		if cctx.Bool("tesy") {
-			build.AnsibleTest = true
+		if cctx.Bool("skip-ansible") {
+			build.SkipAnsible = true
+		}
+		if cctx.Bool("skip-sched") {
+			build.SkipSchedDiag = true
 		}
 
 		log.Info("starting lotus pilot...")

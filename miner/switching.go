@@ -207,6 +207,7 @@ func (m *Miner) newSwitch(ctx context.Context, req SwitchRequest) (*SwitchState,
 	ss.disableAP(ctx)
 
 	m.addSwitch(ss)
+	log.Infof("new switch: %s", ss.ID)
 	return ss, nil
 }
 

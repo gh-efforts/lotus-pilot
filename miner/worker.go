@@ -10,6 +10,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/storage/sealer/sealtasks"
 	"github.com/filecoin-project/lotus/storage/sealer/storiface"
+	"github.com/gh-efforts/lotus-pilot/build"
 	"github.com/google/uuid"
 )
 
@@ -154,6 +155,10 @@ func (m *Miner) workerInfoAPI(ma address.Address) (wst, jobs, sts, SchedDiagInfo
 	sts, err := mi.api.StorageList(m.ctx)
 	if err != nil {
 		return nil, nil, nil, SchedDiagInfo{}, err
+	}
+
+	if build.SkipSchedDiag {
+		return wst, jobs, sts, SchedDiagInfo{}, nil
 	}
 
 	schedb, err := mi.api.SealingSchedDiag(m.ctx, false)

@@ -250,6 +250,8 @@ func printSwitchState(ss miner.SwitchState) {
 		if w.ErrMsg != "" {
 			fmt.Printf("errMsg: %s\n", w.ErrMsg)
 		}
-		fmt.Printf("try: %d\n\n", w.Try)
+		if w.Try != 0 {
+			fmt.Printf("try: %d\n\n", w.Try)
+		}
 	}
 }
