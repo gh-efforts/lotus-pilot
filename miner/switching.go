@@ -133,15 +133,20 @@ func (s *SwitchState) update(m *Miner) {
 				log.Errorf("miner: %s getWorkerStats: %s", s.Req.From, err)
 				continue
 			}
+			has := false
 			for _, w := range worker {
 				if w.Info.Hostname == ws.Hostname {
-					log.Infow("switch success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
-					ws.State = StateWorkerStopWaiting
-					continue
+					has = true
+					break
 				}
 			}
-			log.Warnw("switch failed", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
-			//TODO: re-switch
+			if has {
+				log.Infow("switch success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
+				ws.State = StateWorkerStopWaiting
+			} else {
+				log.Warnw("switch failed", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
+				//TODO: re-switch
+			}
 		case StateWorkerStopWaiting:
 			worker, err := m.getWorkerInfo(s.Req.From)
 			if err != nil {
