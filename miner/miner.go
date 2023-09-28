@@ -40,6 +40,9 @@ type Miner struct {
 	switchs map[uuid.UUID]*SwitchState
 
 	repo *repo.Repo
+
+	infoCache  map[address.Address]workerInfoCache
+	statsCache map[address.Address]workerStatsCache
 }
 
 func NewMiner(ctx context.Context, r *repo.Repo) (*Miner, error) {
@@ -63,11 +66,13 @@ func NewMiner(ctx context.Context, r *repo.Repo) (*Miner, error) {
 		}
 	}
 	m := &Miner{
-		ctx:      ctx,
-		interval: time.Duration(conf.Interval),
-		miners:   miners,
-		switchs:  make(map[uuid.UUID]*SwitchState),
-		repo:     r,
+		ctx:        ctx,
+		interval:   time.Duration(conf.Interval),
+		miners:     miners,
+		switchs:    make(map[uuid.UUID]*SwitchState),
+		repo:       r,
+		infoCache:  make(map[address.Address]workerInfoCache),
+		statsCache: make(map[address.Address]workerStatsCache),
 	}
 	m.run()
 	return m, nil

@@ -17,6 +17,17 @@ type wst = map[uuid.UUID]storiface.WorkerStats
 type jobs = map[uuid.UUID][]storiface.WorkerJob
 type sts = map[storiface.ID][]storiface.Decl
 
+const CacheTimeout = time.Second * 30
+
+type workerInfoCache struct {
+	worker    map[uuid.UUID]workerInfo
+	cacheTime time.Time
+}
+type workerStatsCache struct {
+	worker    map[uuid.UUID]storiface.WorkerStats
+	cacheTime time.Time
+}
+
 type SchedInfo struct {
 	SchedInfo    SchedDiagInfo
 	ReturnedWork []string
@@ -38,20 +49,26 @@ type SchedDiagRequestInfo struct {
 type StateWorker int
 
 const (
-	StateWorkerPicked    StateWorker = iota
-	StateWorkerSwitching             //waiting to switch
-	StateWorkerSwithed
-	StateWorkerStoped
+	StateWorkerPicked StateWorker = iota
+	StateWorkerDisableAPConfirming
+	StateWorkerSwitchWaiting
+	StateWorkerSwitchConfirming
+	StateWorkerStopWaiting
+	StateWorkerStopConfirming
+	StateWorkerComplete
 
 	StateWorkerError
 )
 
 var stateWorkerNames = map[StateWorker]string{
-	StateWorkerPicked:    "workerPicked",
-	StateWorkerSwitching: "workerSwitching",
-	StateWorkerSwithed:   "workerSwithed",
-	StateWorkerStoped:    "workerStoped",
-	StateWorkerError:     "workerError",
+	StateWorkerPicked:              "workerPicked",
+	StateWorkerDisableAPConfirming: "workerDisableAPConfirming",
+	StateWorkerSwitchWaiting:       "workerSwitchWaiting",
+	StateWorkerSwitchConfirming:    "workerSwitchConfirming",
+	StateWorkerStopWaiting:         "workerStopWaiting",
+	StateWorkerStopConfirming:      "workerStopConfirming",
+	StateWorkerComplete:            "workeComplete",
+	StateWorkerError:               "workerError",
 }
 
 func (s StateWorker) String() string {
@@ -159,8 +176,43 @@ func (m *Miner) workerInfoAPI(ma address.Address) (wst, jobs, sts, SchedDiagInfo
 	return wst, jobs, sts, b.SchedInfo, nil
 }
 
-// TODO: cache worker info to reduce call statsAndJobs
+func (m *Miner) getWorkerStats(ma address.Address) (map[uuid.UUID]storiface.WorkerStats, error) {
+	cache, ok := m.statsCache[ma]
+	if ok && time.Now().Before(cache.cacheTime.Add(CacheTimeout)) {
+		return cache.worker, nil
+	}
+
+	worker, err := m.workerStats(ma)
+	if err != nil {
+		return nil, err
+	}
+	m.statsCache[ma] = workerStatsCache{
+		worker:    worker,
+		cacheTime: time.Now(),
+	}
+
+	return worker, nil
+}
+
 func (m *Miner) getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, error) {
+	cache, ok := m.infoCache[ma]
+	if ok && time.Now().Before(cache.cacheTime.Add(CacheTimeout)) {
+		return cache.worker, nil
+	}
+
+	worker, err := m._getWorkerInfo(ma)
+	if err != nil {
+		return nil, err
+	}
+	m.infoCache[ma] = workerInfoCache{
+		worker:    worker,
+		cacheTime: time.Now(),
+	}
+
+	return worker, nil
+}
+
+func (m *Miner) _getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, error) {
 	wst, jobs, sts, diag, err := m.workerInfoAPI(ma)
 	if err != nil {
 		return nil, err
@@ -299,7 +351,7 @@ func (m *Miner) workerPick(req SwitchRequest) (map[uuid.UUID]*WorkerState, error
 		return out, nil
 	}
 
-	worker, err := m.getWorkerInfo(req.From)
+	worker, err := m._getWorkerInfo(req.From)
 	if err != nil {
 		return nil, err
 	}
