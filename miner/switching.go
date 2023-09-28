@@ -96,6 +96,7 @@ func (s *SwitchState) update(m *Miner) {
 				}
 			}
 			if hasAP {
+				log.Infow("disableAP retry", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
 				err := disableAPCmd(m.ctx, ws.Hostname, s.Req.From.String())
 				if err != nil {
 					log.Errorf("disableAPCmd", err.Error())
@@ -139,6 +140,7 @@ func (s *SwitchState) update(m *Miner) {
 					continue
 				}
 			}
+			log.Warnw("switch failed", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
 			//TODO: re-switch
 		case StateWorkerStopWaiting:
 			worker, err := m.getWorkerInfo(s.Req.From)
@@ -167,6 +169,7 @@ func (s *SwitchState) update(m *Miner) {
 				continue
 			}
 			if _, ok := worker[wid]; ok {
+				log.Infow("stop retry", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
 				err := workerStopCmd(m.ctx, ws.Hostname, s.Req.From.String())
 				if err != nil {
 					log.Errorf("workerStopCmd", err.Error())
@@ -236,8 +239,9 @@ func (m *Miner) cancelSwitch(id uuid.UUID) {
 	defer m.swLk.Unlock()
 
 	ss, ok := m.switchs[id]
-	if ok {
+	if ok && ss.State == StateSwitching {
 		ss.State = StateCanceled
+		log.Infof("switch: %s canceled", ss.ID)
 	}
 }
 
@@ -246,6 +250,7 @@ func (m *Miner) removeSwitch(id uuid.UUID) {
 	defer m.swLk.Unlock()
 
 	delete(m.switchs, id)
+	log.Infof("switch: %s deleted", id)
 }
 
 func (m *Miner) getSwitch(id uuid.UUID) *SwitchState {

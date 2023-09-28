@@ -97,6 +97,7 @@ func (m *Miner) add(mi MinerInfo) {
 	defer m.lk.Unlock()
 
 	m.miners[mi.address] = mi
+	log.Infof("add miner: %s", mi.address)
 }
 
 func (m *Miner) remove(ma address.Address) {
@@ -109,6 +110,7 @@ func (m *Miner) remove(ma address.Address) {
 	}
 
 	delete(m.miners, ma)
+	log.Infof("remove miner: %s", ma)
 }
 
 func (m *Miner) list() []string {
