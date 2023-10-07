@@ -29,9 +29,10 @@ func (s StateSwitch) String() string {
 }
 
 type SwitchRequest struct {
-	From  address.Address `json:"from"`
-	To    address.Address `json:"to"`
-	Count int             `json:"count"`
+	From address.Address `json:"from"`
+	To   address.Address `json:"to"`
+	//如果Count为0，则切换所有worker
+	Count int `json:"count"`
 	//指定要切换的worker列表，如果为空，则由pilot选择
 	Worker []uuid.UUID `json:"worker"`
 	//切换前是否禁止AP任务，如果不禁止，则fromMiner的任务全部完成后再切到toMiner

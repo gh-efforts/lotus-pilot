@@ -331,7 +331,6 @@ func (m *Miner) workerPick(req SwitchRequest) (map[uuid.UUID]*WorkerState, error
 		if err != nil {
 			return nil, err
 		}
-
 		for _, w := range req.Worker {
 			ws, ok := wst[w]
 			if !ok {
@@ -352,7 +351,28 @@ func (m *Miner) workerPick(req SwitchRequest) (map[uuid.UUID]*WorkerState, error
 				State:    StateWorkerPicked,
 			}
 		}
+		return out, nil
+	}
 
+	if req.Count == 0 {
+		//switch all worker
+		wst, err := m.workerStats(req.From)
+		if err != nil {
+			return nil, err
+		}
+		for wid, st := range wst {
+			if !workerCheck(st) {
+				continue
+			}
+			if _, ok := switchingWorkers[wid]; ok {
+				continue
+			}
+			out[wid] = &WorkerState{
+				WorkerID: wid,
+				Hostname: st.Info.Hostname,
+				State:    StateWorkerPicked,
+			}
+		}
 		return out, nil
 	}
 
