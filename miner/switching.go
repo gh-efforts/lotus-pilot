@@ -169,7 +169,7 @@ func (s *SwitchState) update(m *Miner) {
 				ws.State = StateWorkerStopConfirming
 			}
 		case StateWorkerStopConfirming:
-			worker, err := m.getWorkerStats(s.Req.To)
+			worker, err := m.getWorkerStats(s.Req.From)
 			if err != nil {
 				log.Errorf("miner: %s getWorkerStats: %s", s.Req.From, err)
 				continue
@@ -180,11 +180,11 @@ func (s *SwitchState) update(m *Miner) {
 				if err != nil {
 					log.Errorf("workerStopCmd", err.Error())
 					ws.updateErr(err.Error())
-					continue
 				}
+			} else {
+				log.Infow("stop success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
+				ws.State = StateWorkerComplete
 			}
-			log.Infow("stop success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
-			ws.State = StateWorkerComplete
 		case StateWorkerComplete:
 			fallthrough
 		case StateWorkerError:
