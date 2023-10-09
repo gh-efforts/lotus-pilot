@@ -21,7 +21,7 @@ type sts = map[storiface.ID][]storiface.Decl
 const CacheTimeout = time.Second * 30
 
 type workerInfoCache struct {
-	worker    map[uuid.UUID]workerInfo
+	worker    map[uuid.UUID]WorkerInfo
 	cacheTime time.Time
 }
 type workerStatsCache struct {
@@ -78,17 +78,17 @@ func (s StateWorker) String() string {
 
 const ErrTryCount = 10
 
-type workerInfo struct {
-	workerID  uuid.UUID
-	storageID storiface.ID
-	hostname  string
-	runing    map[string]int //taskType
-	prepared  map[string]int
-	assigned  map[string]int
-	lastStart map[string]time.Time //last runing start time
-	sched     map[string]int       //task in sched
-	sectors   map[abi.SectorID]struct{}
-	tasks     map[sealtasks.TaskType]struct{}
+type WorkerInfo struct {
+	WorkerID  uuid.UUID            `json:"workerID"`
+	StorageID storiface.ID         `json:"storageID"`
+	Hostname  string               `json:"hostname"`
+	Runing    map[string]int       `json:"runing"` //taskType
+	Prepared  map[string]int       `json:"prepared"`
+	Assigned  map[string]int       `json:"assigned"`
+	LastStart map[string]time.Time `json:"lastStart"` //last runing start time
+	Sched     map[string]int       `json:"sched"`     //task in sched
+	Sectors   map[string]struct{}  `json:"sectors"`   //sectorID
+	Tasks     map[string]struct{}  `json:"tasks"`
 }
 
 type WorkerState struct {
@@ -107,30 +107,30 @@ func (w *WorkerState) updateErr(errMsg string) {
 	}
 }
 
-func (w *workerInfo) sum(tt string) int {
-	return w.runing[tt] + w.prepared[tt] + w.assigned[tt] + w.sched[tt]
+func (w *WorkerInfo) sum(tt string) int {
+	return w.Runing[tt] + w.Prepared[tt] + w.Assigned[tt] + w.Sched[tt]
 }
 
-func (w *workerInfo) canSwitch() bool {
+func (w *WorkerInfo) canSwitch() bool {
 	return w.sum("AP")+w.sum("PC1")+w.sum("PC2") == 0
 }
 
-func (w *workerInfo) canStop() bool {
+func (w *WorkerInfo) canStop() bool {
 	var all int
-	for _, v := range w.runing {
+	for _, v := range w.Runing {
 		all += v
 	}
-	for _, v := range w.prepared {
+	for _, v := range w.Prepared {
 		all += v
 	}
-	for _, v := range w.assigned {
+	for _, v := range w.Assigned {
 		all += v
 	}
-	for _, v := range w.sched {
+	for _, v := range w.Sched {
 		all += v
 	}
 
-	return all+len(w.sectors) == 0
+	return all+len(w.Sectors) == 0
 }
 
 func (m *Miner) workerInfoAPI(ma address.Address) (wst, jobs, sts, SchedDiagInfo, error) {
@@ -199,7 +199,7 @@ func (m *Miner) getWorkerStats(ma address.Address) (map[uuid.UUID]storiface.Work
 	return worker, nil
 }
 
-func (m *Miner) getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, error) {
+func (m *Miner) getWorkerInfo(ma address.Address) (map[uuid.UUID]WorkerInfo, error) {
 	cache, ok := m.infoCache[ma]
 	if ok && time.Now().Before(cache.cacheTime.Add(CacheTimeout)) {
 		return cache.worker, nil
@@ -217,13 +217,13 @@ func (m *Miner) getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, err
 	return worker, nil
 }
 
-func (m *Miner) _getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, error) {
+func (m *Miner) _getWorkerInfo(ma address.Address) (map[uuid.UUID]WorkerInfo, error) {
 	wst, jobs, sts, diag, err := m.workerInfoAPI(ma)
 	if err != nil {
 		return nil, err
 	}
 
-	worker := map[uuid.UUID]workerInfo{}
+	worker := map[uuid.UUID]WorkerInfo{}
 	sectorWorker := map[abi.SectorID]uuid.UUID{}
 	for wid, st := range wst {
 		if !workerCheck(st) {
@@ -239,27 +239,27 @@ func (m *Miner) _getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, er
 			}
 		}
 
-		sectors := map[abi.SectorID]struct{}{}
+		sectors := map[string]struct{}{}
 		for _, d := range sts[id] {
-			sectors[d.SectorID] = struct{}{}
+			sectors[d.SectorID.Number.String()] = struct{}{}
 			sectorWorker[d.SectorID] = wid
 		}
 
-		tasks := map[sealtasks.TaskType]struct{}{}
+		tasks := map[string]struct{}{}
 		for _, t := range st.Tasks {
-			tasks[t] = struct{}{}
+			tasks[t.Short()] = struct{}{}
 		}
 
-		worker[wid] = workerInfo{
-			workerID:  wid,
-			storageID: id,
-			hostname:  st.Info.Hostname,
-			runing:    map[string]int{},
-			prepared:  map[string]int{},
-			assigned:  map[string]int{},
-			lastStart: make(map[string]time.Time),
-			sectors:   sectors,
-			tasks:     tasks,
+		worker[wid] = WorkerInfo{
+			WorkerID:  wid,
+			StorageID: id,
+			Hostname:  st.Info.Hostname,
+			Runing:    map[string]int{},
+			Prepared:  map[string]int{},
+			Assigned:  map[string]int{},
+			LastStart: make(map[string]time.Time),
+			Sectors:   sectors,
+			Tasks:     tasks,
 		}
 	}
 
@@ -274,15 +274,15 @@ func (m *Miner) _getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, er
 			}
 
 			if job.RunWait == storiface.RWRunning {
-				worker[wid].runing[job.Task.Short()] += 1
-				if worker[wid].lastStart[job.Task.Short()].Before(job.Start) {
-					worker[wid].lastStart[job.Task.Short()] = job.Start
+				worker[wid].Runing[job.Task.Short()] += 1
+				if worker[wid].LastStart[job.Task.Short()].Before(job.Start) {
+					worker[wid].LastStart[job.Task.Short()] = job.Start
 				}
 			} else if job.RunWait == storiface.RWPrepared {
-				worker[wid].prepared[job.Task.Short()] += 1
+				worker[wid].Prepared[job.Task.Short()] += 1
 			} else {
 				//assigned
-				worker[wid].assigned[job.Task.Short()] += 1
+				worker[wid].Assigned[job.Task.Short()] += 1
 			}
 		}
 	}
@@ -298,7 +298,7 @@ func (m *Miner) _getWorkerInfo(ma address.Address) (map[uuid.UUID]workerInfo, er
 			log.Warnf("worker: %s not found", wid)
 			continue
 		}
-		worker[wid].sched[req.TaskType.Short()] += 1
+		worker[wid].Sched[req.TaskType.Short()] += 1
 	}
 
 	return worker, nil
@@ -385,10 +385,10 @@ func (m *Miner) workerPick(req SwitchRequest) (map[uuid.UUID]*WorkerState, error
 		return nil, fmt.Errorf("not enough worker. miner: %s has: %d need: %d", req.From, len(worker), req.Count)
 	}
 
-	var workerSort []workerInfo
+	var workerSort []WorkerInfo
 	for _, w := range worker {
 		//skip switchingWorkers
-		if _, ok := switchingWorkers[w.workerID]; ok {
+		if _, ok := switchingWorkers[w.WorkerID]; ok {
 			continue
 		}
 
@@ -407,17 +407,17 @@ func (m *Miner) workerPick(req SwitchRequest) (map[uuid.UUID]*WorkerState, error
 			return wi.sum("PC2") < wj.sum("PC2")
 		}
 
-		if wi.lastStart["PC1"].Equal(wj.lastStart["PC1"]) {
-			return wi.hostname < wj.hostname
+		if wi.LastStart["PC1"].Equal(wj.LastStart["PC1"]) {
+			return wi.Hostname < wj.Hostname
 		}
 
-		return wi.lastStart["PC1"].Before(wj.lastStart["PC1"])
+		return wi.LastStart["PC1"].Before(wj.LastStart["PC1"])
 	})
 
 	for _, w := range workerSort[0:req.Count] {
-		out[w.workerID] = &WorkerState{
-			WorkerID: w.workerID,
-			Hostname: w.hostname,
+		out[w.WorkerID] = &WorkerState{
+			WorkerID: w.WorkerID,
+			Hostname: w.Hostname,
 			State:    StateWorkerPicked,
 		}
 	}

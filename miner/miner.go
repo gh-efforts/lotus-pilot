@@ -36,7 +36,6 @@ type Miner struct {
 	lk     sync.RWMutex
 	miners map[address.Address]MinerInfo
 
-	//TODO: use datastore replace map
 	swLk    sync.RWMutex
 	switchs map[uuid.UUID]*SwitchState
 

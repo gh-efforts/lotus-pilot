@@ -10,6 +10,7 @@ import (
 
 	"github.com/gh-efforts/lotus-pilot/miner"
 	"github.com/gh-efforts/lotus-pilot/repo/config"
+	"github.com/google/uuid"
 	"github.com/urfave/cli/v2"
 )
 
@@ -20,6 +21,7 @@ var minerCmd = &cli.Command{
 		minerAddCmd,
 		minerRemoveCmd,
 		minerListCmd,
+		minerWorkerCmd,
 	},
 	Flags: []cli.Flag{
 		&cli.StringFlag{
@@ -134,6 +136,46 @@ var minerListCmd = &cli.Command{
 		}
 		fmt.Println(string(r))
 
+		return nil
+	},
+}
+
+var minerWorkerCmd = &cli.Command{
+	Name:  "worker",
+	Usage: "list miner workers",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name: "miner-id",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+		id := cctx.String("miner-id")
+		if id == "" {
+			return errors.New("miner-id is empty")
+		}
+
+		url := fmt.Sprintf("http://%s/miner/worker/%s", cctx.String("connect"), id)
+		resp, err := http.Get(url)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			r, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("status: %s msg: %s", resp.Status, string(r))
+		}
+
+		var wi map[uuid.UUID]miner.WorkerInfo
+		err = json.NewDecoder(resp.Body).Decode(&wi)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("%+v\n", wi)
 		return nil
 	},
 }

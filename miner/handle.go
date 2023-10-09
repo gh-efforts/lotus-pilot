@@ -20,6 +20,7 @@ func (m *Miner) Handle() {
 	http.HandleFunc("/miner/add", middlewareTimer(m.addHandle))
 	http.HandleFunc("/miner/remove/", middlewareTimer(m.removeHandle))
 	http.HandleFunc("/miner/list", middlewareTimer(m.listHandle))
+	http.HandleFunc("/miner/worker/", middlewareTimer(m.workerHandle))
 
 	http.HandleFunc("/switch/new", middlewareTimer(m.switchHandle))
 	http.HandleFunc("/switch/get/", middlewareTimer(m.getSwitchHandle))
@@ -28,8 +29,6 @@ func (m *Miner) Handle() {
 	http.HandleFunc("/switch/list", middlewareTimer(m.listSwitchHandle))
 
 	http.HandleFunc("/script/create/", middlewareTimer(m.createScriptHandle))
-
-	//TODO: worker list
 }
 
 func (m *Miner) addHandle(w http.ResponseWriter, r *http.Request) {
@@ -104,6 +103,34 @@ func (m *Miner) listHandle(w http.ResponseWriter, r *http.Request) {
 	log.Debugw("listHandle", "path", r.URL.Path)
 
 	w.Write([]byte(fmt.Sprintf("%s", m.list())))
+}
+
+func (m *Miner) workerHandle(w http.ResponseWriter, r *http.Request) {
+	log.Debugw("workerHandle", "path", r.URL.Path)
+
+	id := strings.TrimPrefix(r.URL.Path, "/miner/worker/")
+	maddr, err := address.NewFromString(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if !m.has(maddr) {
+		http.Error(w, "miner not found", http.StatusBadRequest)
+		return
+	}
+
+	wi, err := m.getWorkerInfo(maddr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	body, err := json.Marshal(&wi)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(body)
 }
 
 func (m *Miner) switchHandle(w http.ResponseWriter, r *http.Request) {

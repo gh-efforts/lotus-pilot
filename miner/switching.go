@@ -121,7 +121,7 @@ func (s *SwitchState) update(m *Miner) {
 				continue
 			}
 			if w.canSwitch() {
-				err := workerRunCmd(m.ctx, w.hostname, s.Req.To.String(), m.repo.ScriptsPath())
+				err := workerRunCmd(m.ctx, w.Hostname, s.Req.To.String(), m.repo.ScriptsPath())
 				if err != nil {
 					log.Errorf("workerRunCmd", err.Error())
 					ws.updateErr(err.Error())
@@ -229,17 +229,21 @@ func (m *Miner) process() {
 	m.swLk.Lock()
 	defer m.swLk.Unlock()
 
+	needWrite := false
 	for _, ss := range m.switchs {
 		if ss.State == StateCanceled || ss.State == StateComplete {
 			continue
 		}
 
 		ss.update(m)
+		needWrite = true
 	}
 
-	err := m.writeSwitch()
-	if err != nil {
-		log.Error(err)
+	if needWrite {
+		err := m.writeSwitch()
+		if err != nil {
+			log.Error(err)
+		}
 	}
 }
 
@@ -255,7 +259,7 @@ func (m *Miner) writeSwitch() error {
 	if err != nil {
 		return err
 	}
-
+	log.Debug("writeSwitch")
 	return nil
 }
 

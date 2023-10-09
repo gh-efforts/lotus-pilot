@@ -58,6 +58,7 @@ COMMANDS:
    add      add new miner
    remove   remove miner
    list     list all miner
+   worker   list miner workers
    help, h  Shows a list of commands or help for one command
 
 OPTIONS:
@@ -92,7 +93,7 @@ COMMANDS:
    ```
 发起新的切换请求，设置不同的切换参数，以满足不同的切换场景。   
 切换请求参数：
-```json
+```golang
 type SwitchRequest struct {
 	From address.Address `json:"from"`
 	To   address.Address `json:"to"`
