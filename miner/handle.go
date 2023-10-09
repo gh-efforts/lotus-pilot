@@ -155,7 +155,11 @@ func (m *Miner) cancelSwitchHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m.cancelSwitch(id)
+	err = m.cancelSwitch(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (m *Miner) removeSwitchHandle(w http.ResponseWriter, r *http.Request) {
@@ -167,7 +171,11 @@ func (m *Miner) removeSwitchHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m.removeSwitch(id)
+	err = m.removeSwitch(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (m *Miner) listSwitchHandle(w http.ResponseWriter, r *http.Request) {

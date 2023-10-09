@@ -11,12 +11,14 @@ make
 ```bash
 ./lotus-pilot init
 
-➜  ~ tree .lotuspilot
-.lotuspilot
+➜  .lotuspilot tree
+.
 ├── config.json
 ├── scripts
-│   └── f017387.sh
+│   ├── f017387.sh
+│   └── f028064.sh
 ├── state
+│   └── switch.json
 └── template
     ├── worker32G.tmpl
     └── worker64G.tmpl
@@ -89,6 +91,19 @@ COMMANDS:
    help, h  Shows a list of commands or help for one command
    ```
 发起新的切换请求，设置不同的切换参数，以满足不同的切换场景。   
+切换请求参数：
+```json
+type SwitchRequest struct {
+	From address.Address `json:"from"`
+	To   address.Address `json:"to"`
+	//如果Count为0，则切换所有worker
+	Count int `json:"count"`
+	//指定要切换的worker列表，如果为空，则由pilot选择
+	Worker []uuid.UUID `json:"worker"`
+	//切换前是否禁止AP任务，如果不禁止，则fromMiner的任务全部完成后再切到toMiner
+	DisableAP bool `json:"disableAP"`
+}
+```
 polit 接受请求后返回一个 switchID，可以根据 switchID 查看切换状态，取消，删除等。  
 ```bash
 root@L01-W29:# ./lotus-pilot switch new --from f017387 --to f028064 --count 1 --disableAP                                                         
@@ -106,7 +121,7 @@ hostname: DCZ-2007FD208U36-L06-W07
 state: workerStoped                                                                                                                                                             
 try: 0  
 ```
-切换发起成功后（根据 switchID 查看状态是 Accepted）  
+切换发起成功后（根据 switchID 查看状态）  
 pilot 会定时（config interval）检查 worker 的状态，满足切换条件时进行切换，满足停止条件时则停止原 worker  
 
 worker切换条件：
@@ -116,3 +131,6 @@ worker切换条件：
 worker stop 条件：
 - sealing job 中这台 worker 没有任何任务
 - miner索引中，这台 worker 没有 sector
+
+切换状态会保存到: `.lotuspilot/state/switch.json`  
+重启 pilot 会读取switch.json 恢复切换状态

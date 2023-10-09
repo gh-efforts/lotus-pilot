@@ -20,6 +20,7 @@ const (
 	fsState     = "state"
 	fsWorker32G = "worker32G.tmpl"
 	fsWorker64G = "worker64G.tmpl"
+	fsSwitch    = "switch.json"
 )
 
 var log = logging.Logger("pilot/repo")
@@ -136,7 +137,8 @@ func (r *Repo) initState() error {
 	if err != nil && !os.IsExist(err) {
 		return err
 	}
-	return nil
+
+	return os.WriteFile(r.switchStateFile(), []byte("{}"), 0666)
 }
 
 func (r *Repo) LoadConfig() (*config.Config, error) {
@@ -227,4 +229,16 @@ func (r *Repo) UpdateConfig(miner string, api config.APIInfo) error {
 	}
 	log.Infof("update config: %s", miner)
 	return nil
+}
+
+func (r *Repo) switchStateFile() string {
+	return filepath.Join(r.path, fsState, fsSwitch)
+}
+
+func (r *Repo) WriteSwitchState(data []byte) error {
+	return os.WriteFile(r.switchStateFile(), data, 0666)
+}
+
+func (r *Repo) ReadSwitchState() ([]byte, error) {
+	return os.ReadFile(r.switchStateFile())
 }

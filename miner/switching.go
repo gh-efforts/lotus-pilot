@@ -2,6 +2,7 @@ package miner
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/storage/sealer/sealtasks"
@@ -215,7 +216,11 @@ func (m *Miner) newSwitch(ctx context.Context, req SwitchRequest) (*SwitchState,
 
 	ss.disableAP(ctx)
 
-	m.addSwitch(ss)
+	err = m.addSwitch(ss)
+	if err != nil {
+		return nil, err
+	}
+
 	log.Infof("new switch: %s", ss.ID)
 	return ss, nil
 }
@@ -231,16 +236,39 @@ func (m *Miner) process() {
 
 		ss.update(m)
 	}
+
+	err := m.writeSwitch()
+	if err != nil {
+		log.Error(err)
+	}
 }
 
-func (m *Miner) addSwitch(ss *SwitchState) {
+// write switchs state to repo/state
+// caller need keep swLk lock
+func (m *Miner) writeSwitch() error {
+	data, err := json.Marshal(m.switchs)
+	if err != nil {
+		return err
+	}
+
+	err = m.repo.WriteSwitchState(data)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *Miner) addSwitch(ss *SwitchState) error {
 	m.swLk.Lock()
 	defer m.swLk.Unlock()
 
 	m.switchs[ss.ID] = ss
+
+	return m.writeSwitch()
 }
 
-func (m *Miner) cancelSwitch(id uuid.UUID) {
+func (m *Miner) cancelSwitch(id uuid.UUID) error {
 	m.swLk.Lock()
 	defer m.swLk.Unlock()
 
@@ -249,14 +277,18 @@ func (m *Miner) cancelSwitch(id uuid.UUID) {
 		ss.State = StateCanceled
 		log.Infof("switch: %s canceled", ss.ID)
 	}
+
+	return m.writeSwitch()
 }
 
-func (m *Miner) removeSwitch(id uuid.UUID) {
+func (m *Miner) removeSwitch(id uuid.UUID) error {
 	m.swLk.Lock()
 	defer m.swLk.Unlock()
 
 	delete(m.switchs, id)
 	log.Infof("switch: %s deleted", id)
+
+	return m.writeSwitch()
 }
 
 func (m *Miner) getSwitch(id uuid.UUID) *SwitchState {

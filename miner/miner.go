@@ -2,6 +2,7 @@ package miner
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
@@ -65,11 +66,22 @@ func NewMiner(ctx context.Context, r *repo.Repo) (*Miner, error) {
 			return nil, err
 		}
 	}
+
+	data, err := r.ReadSwitchState()
+	if err != nil {
+		return nil, err
+	}
+	var switchs map[uuid.UUID]*SwitchState
+	err = json.Unmarshal(data, &switchs)
+	if err != nil {
+		return nil, err
+	}
+
 	m := &Miner{
 		ctx:        ctx,
 		interval:   time.Duration(conf.Interval),
 		miners:     miners,
-		switchs:    make(map[uuid.UUID]*SwitchState),
+		switchs:    switchs,
 		repo:       r,
 		infoCache:  make(map[address.Address]workerInfoCache),
 		statsCache: make(map[address.Address]workerStatsCache),
