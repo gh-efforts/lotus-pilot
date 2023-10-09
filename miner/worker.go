@@ -184,6 +184,7 @@ func (m *Miner) workerInfoAPI(ma address.Address) (wst, jobs, sts, SchedDiagInfo
 func (m *Miner) getWorkerStats(ma address.Address) (map[uuid.UUID]storiface.WorkerStats, error) {
 	cache, ok := m.statsCache[ma]
 	if ok && time.Now().Before(cache.cacheTime.Add(CacheTimeout)) {
+		log.Debugw("getWorkerStats", "cacheTime", cache.cacheTime, "miner", ma)
 		return cache.worker, nil
 	}
 
@@ -202,6 +203,7 @@ func (m *Miner) getWorkerStats(ma address.Address) (map[uuid.UUID]storiface.Work
 func (m *Miner) getWorkerInfo(ma address.Address) (map[uuid.UUID]WorkerInfo, error) {
 	cache, ok := m.infoCache[ma]
 	if ok && time.Now().Before(cache.cacheTime.Add(CacheTimeout)) {
+		log.Debugw("getWorkerInfo", "cacheTime", cache.cacheTime, "miner", ma)
 		return cache.worker, nil
 	}
 
@@ -269,7 +271,7 @@ func (m *Miner) _getWorkerInfo(ma address.Address) (map[uuid.UUID]WorkerInfo, er
 				continue
 			}
 			if _, ok := worker[wid]; !ok {
-				log.Warnf("worker: %s not found", wid)
+				log.Debugf("worker: %s not found", wid)
 				continue
 			}
 
@@ -295,7 +297,7 @@ func (m *Miner) _getWorkerInfo(ma address.Address) (map[uuid.UUID]WorkerInfo, er
 			continue
 		}
 		if _, ok := worker[wid]; !ok {
-			log.Warnf("worker: %s not found", wid)
+			log.Debugf("worker: %s not found", wid)
 			continue
 		}
 		worker[wid].Sched[req.TaskType.Short()] += 1

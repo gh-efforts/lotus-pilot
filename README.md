@@ -1,5 +1,7 @@
 # lotus-pilot
 多个miner封存时，自动切换worker到指定miner
+
+背景：[封存Worker切换方案讨论](https://greaterheat.larksuite.com/wiki/BVgVwNY5BiH2KWkFdvzu2k7WsVf)
 ## 部署
 编译
 ```bash
