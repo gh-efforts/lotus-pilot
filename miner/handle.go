@@ -55,7 +55,7 @@ func (m *Miner) addHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = m.repo.CreateScript(mi.address.String(), mi.token, mi.size)
+	err = m.repo.CreateScript(mi.address, mi.token, mi.size)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

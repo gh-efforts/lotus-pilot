@@ -19,3 +19,12 @@ done
 listen=0.0.0.0:$port
 
 echo $listen
+
+
+port={{.Port}}
+while
+  netstat -atun | grep -q "$port"
+do
+  port=$port+1
+done
+listen=0.0.0.0:$port

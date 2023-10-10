@@ -60,7 +60,7 @@ func NewMiner(ctx context.Context, r *repo.Repo) (*Miner, error) {
 
 		miners[mi.address] = mi
 
-		err = r.CreateScript(mi.address.String(), info.ToAPIInfo(), mi.size)
+		err = r.CreateScript(mi.address, info.ToAPIInfo(), mi.size)
 		if err != nil {
 			return nil, err
 		}
@@ -161,7 +161,7 @@ func (m *Miner) createScript(id string) error {
 
 	if id == "all" {
 		for _, mi := range m.miners {
-			err := m.repo.CreateScript(mi.address.String(), mi.token, mi.size)
+			err := m.repo.CreateScript(mi.address, mi.token, mi.size)
 			if err != nil {
 				return err
 			}
@@ -178,7 +178,7 @@ func (m *Miner) createScript(id string) error {
 	if !ok {
 		return fmt.Errorf("miner: %s not found", id)
 	}
-	err = m.repo.CreateScript(mi.address.String(), mi.token, mi.size)
+	err = m.repo.CreateScript(mi.address, mi.token, mi.size)
 	if err != nil {
 		return err
 	}
