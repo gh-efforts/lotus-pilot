@@ -183,6 +183,7 @@ func (s *SwitchState) update(m *Miner) {
 				if err != nil {
 					log.Errorf("workerStopCmd", err.Error())
 					ws.updateErr(err.Error())
+					continue
 				}
 				ws.updateErr("stop retry")
 			} else {
