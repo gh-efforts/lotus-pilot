@@ -3,10 +3,12 @@ package repo
 import (
 	"embed"
 	"encoding/json"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"text/template"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/gh-efforts/lotus-pilot/repo/config"
 	logging "github.com/ipfs/go-log/v2"
@@ -36,6 +38,7 @@ type Repo struct {
 type MinerParse struct {
 	MinerID      string
 	MinerAPIInfo string
+	Port         int
 }
 
 func New(path string) (*Repo, error) {
@@ -157,13 +160,20 @@ func (r *Repo) ScriptsPath() string {
 	return filepath.Join(r.path, fsScripts)
 }
 
-func (r *Repo) CreateScript(miner, token string, size abi.SectorSize) error {
+func (r *Repo) CreateScript(miner address.Address, token string, size abi.SectorSize) error {
 	var t *template.Template
 	var err error
 
+	id, err := address.IDFromAddress(miner)
+	if err != nil {
+		return err
+	}
+	port := rand.New(rand.NewSource(int64(id))).Intn(9999) + 50000
+
 	mp := MinerParse{
-		MinerID:      miner,
+		MinerID:      miner.String(),
 		MinerAPIInfo: token,
+		Port:         port,
 	}
 
 	if size == 68719476736 {
@@ -178,7 +188,7 @@ func (r *Repo) CreateScript(miner, token string, size abi.SectorSize) error {
 		}
 	}
 
-	name := filepath.Join(r.ScriptsPath(), miner+".sh")
+	name := filepath.Join(r.ScriptsPath(), miner.String()+".sh")
 	f, err := os.Create(name)
 	if err != nil {
 		return err

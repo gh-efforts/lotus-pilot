@@ -1,14 +1,7 @@
 #!/bin/bash
 ulimit -n 655350
 
-# 随机获取可用端口
-while
-  port=$(shuf -n 1 -i 49152-65535)
-  netstat -atun | grep -q "$port"
-do
-  continue
-done
-listen=0.0.0.0:$port
+listen=0.0.0.0:{{.Port}}
 
 base_dir=/media/nvme/{{.MinerID}}
 mkdir -p $base_dir

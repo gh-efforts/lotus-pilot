@@ -66,6 +66,7 @@ func (s *SwitchState) disableAP(ctx context.Context) {
 
 func (s *SwitchState) update(m *Miner) {
 	workerCompleted := 0
+	workerError := 0
 	for wid, ws := range s.Worker {
 		switch ws.State {
 		case StateWorkerPicked:
@@ -105,6 +106,7 @@ func (s *SwitchState) update(m *Miner) {
 					ws.updateErr(err.Error())
 					continue
 				}
+				ws.updateErr("disableAP retry")
 			} else {
 				log.Infow("disableAP success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
 				ws.State = StateWorkerSwitchWaiting
@@ -182,22 +184,28 @@ func (s *SwitchState) update(m *Miner) {
 					log.Errorf("workerStopCmd", err.Error())
 					ws.updateErr(err.Error())
 				}
+				ws.updateErr("stop retry")
 			} else {
 				log.Infow("stop success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
 				ws.State = StateWorkerComplete
 			}
 		case StateWorkerComplete:
-			fallthrough
-		case StateWorkerError:
 			workerCompleted += 1
+		case StateWorkerError:
+			workerError += 1
 		default:
 			log.Warnw("switch state", "id", s.ID, "workerID", ws.WorkerID, "worker state", ws.State)
 		}
 	}
 
-	if workerCompleted == len(s.Worker) {
-		s.State = StateComplete
-		log.Infof("switchID: %s complete", s.ID)
+	if workerCompleted+workerError == len(s.Worker) {
+		if workerError != 0 {
+			s.State = StateError
+			log.Infof("switchID: %s error", s.ID)
+		} else {
+			s.State = StateComplete
+			log.Infof("switchID: %s complete", s.ID)
+		}
 	}
 }
 
@@ -231,7 +239,7 @@ func (m *Miner) process() {
 
 	needWrite := false
 	for _, ss := range m.switchs {
-		if ss.State == StateCanceled || ss.State == StateComplete {
+		if ss.State != StateSwitching {
 			continue
 		}
 
