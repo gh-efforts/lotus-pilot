@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 
 	"github.com/gh-efforts/lotus-pilot/miner"
 	"github.com/gh-efforts/lotus-pilot/repo/config"
@@ -175,7 +176,23 @@ var minerWorkerCmd = &cli.Command{
 			return err
 		}
 
-		fmt.Printf("%+v\n", wi)
+		printWorkerInfo(wi)
 		return nil
 	},
+}
+
+func printWorkerInfo(wi map[uuid.UUID]miner.WorkerInfo) {
+	for _, w := range wi {
+		fmt.Printf("WorkerID: %s\n", w.WorkerID)
+		fmt.Printf("StorageID: %s\n", w.StorageID)
+		fmt.Printf("Hostname: %s\n", w.Hostname)
+		fmt.Printf("Runing: %+v\n", w.Runing)
+		fmt.Printf("Prepared: %+v\n", w.Prepared)
+		fmt.Printf("Assigned: %+v\n", w.Assigned)
+		fmt.Printf("Sched: %+v\n", w.Sched)
+		fmt.Printf("LastStart: %s\n", w.LastStart)
+		fmt.Printf("Sectors: %s\n", reflect.ValueOf(w.Sectors).MapKeys())
+		fmt.Printf("Tasks: %s\n", reflect.ValueOf(w.Tasks).MapKeys())
+		fmt.Println()
+	}
 }
