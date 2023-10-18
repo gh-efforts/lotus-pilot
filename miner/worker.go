@@ -260,6 +260,7 @@ func (m *Miner) _getWorkerInfo(ma address.Address) (map[uuid.UUID]WorkerInfo, er
 			Prepared:  map[string]int{},
 			Assigned:  map[string]int{},
 			LastStart: make(map[string]time.Time),
+			Sched:     make(map[string]int),
 			Sectors:   sectors,
 			Tasks:     tasks,
 		}
