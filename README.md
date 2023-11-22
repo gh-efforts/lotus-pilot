@@ -17,8 +17,8 @@ make
 .
 ├── config.json
 ├── scripts
-│   ├── f017387.sh
-│   └── f028064.sh
+│   ├── t017387.sh
+│   └── t028064.sh
 ├── state
 │   └── switch.json
 └── template
@@ -109,7 +109,7 @@ type SwitchRequest struct {
 ```
 polit 接受请求后返回一个 switchID，可以根据 switchID 查看切换状态，取消，删除等。  
 ```bash
-root@L01-W29:# ./lotus-pilot switch new --from f017387 --to f028064 --count 1 --disableAP                                                         
+root@L01-W29:# ./lotus-pilot switch new --from t017387 --to t028064 --count 1 --disableAP                                                         
 switchID: 03f93ab6-557e-4636-8364-255cc15fa15d                                                                                                                                  
 worker:                                                                                                                                                                         
 935fde10-7e51-47ef-ac7b-07bf9ca3e5ab DCZ-2007FD208U36-L06-W07 
@@ -117,7 +117,7 @@ worker:
 root@L01-W29:# ./lotus-pilot switch get --switch-id 03f93ab6-557e-4636-8364-255cc15fa15d                                                          
 switchID: 03f93ab6-557e-4636-8364-255cc15fa15d                                                                                                                                  
 state: switching                                                                                                                                                                
-switch request {From:f017387 To:f028064 Count:1 Worker:[] DisableAP:false}                                                                                                      
+switch request {From:t017387 To:t028064 Count:1 Worker:[] DisableAP:false}                                                                                                      
                                                                                                                                                                                 
 workerID: 935fde10-7e51-47ef-ac7b-07bf9ca3e5ab                                                                                                                                  
 hostname: DCZ-2007FD208U36-L06-W07                                                                                                                                              

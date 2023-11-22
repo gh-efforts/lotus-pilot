@@ -17,6 +17,9 @@ build:
 	go build $(GOFLAGS) -o lotus-pilot ./cmd/lotus-pilot
 .PHONY: build
 
+calibnet: GOFLAGS+=-tags=calibnet
+calibnet: build
+
 clean:
 	rm -f lotus-pilot
 	go clean

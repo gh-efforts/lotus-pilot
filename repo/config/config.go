@@ -72,8 +72,8 @@ func DefaultConfig() *Config {
 	}
 
 	miners := make(map[string]APIInfo)
-	miners["f017387"] = miner
-	miners["f028064"] = miner64
+	miners["t017387"] = miner
+	miners["t028064"] = miner64
 
 	return &Config{
 		Interval: Duration(time.Minute),
