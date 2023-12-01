@@ -11,7 +11,7 @@ log_dir=$base_dir/log
 tmp_dir=$base_dir/tmp
 
 mkdir -p $repo_dir $log_dir $tmp_dir
-
+sysctl -w vm.nr_hugepages=851968
 # miner 的api信息，参考miner部署环节
 export MINER_API_INFO={{.MinerAPIInfo}}
 
@@ -64,21 +64,20 @@ elif [[ $gpu_number > 1 ]];then
 fi
 
 # 设置 PC2 的CPU使用数量，必须设置，默认设置为是2, 一般不需要修改
-export PC2_32G_MAX_PARALLELISM_GPU=2
+export PC2_32G_MAX_PARALLELISM_GPU=4
 
 # 设置 PC2 的GPU使用数量，必须设置，默认设置为是1, 一般不需要修改
 export PC2_32G_GPU_UTILIZATION=1
 
 # 设置 AP 任务并行数， 设置为1， 一般不需要修改。
 export AP_32G_MAX_CONCURRENT=1
-export FAST_ADD_PIECE=1
 
 # 设置 GET 任务并行数， 设置为1， 一般不需修改。
 export GET_32G_MAX_CONCURRENT=1
 
 # 如果Miner使用了七牛，那么Worker也必须使用，否则数据存储会有问题，生产中都使用七牛。
-export MUST_USE_QINIU=1
-export QINIU_READER_CONFIG_PATH=/media/nvme/ap-read.json
+export READ_STORAGE_FROM_MINER=1
+export QINIU_READER_CONFIG=/media/nvme/ap-read.json
 # Rust 日志等级
 export RUST_LOG=info
 
@@ -86,5 +85,9 @@ export RUST_LOG=info
 # 如果不配置，P1, P2的日志会和Worker日志混在一起，不便排查问题。
 export P1_SEPARATE_LOG_PATH=$log_dir
 export P2_SEPARATE_LOG_PATH=$log_dir
+#指定fastAddPiece需要的unsealed文件位置
+#默认位置：/media/nvme/s-t01000-0
+#当UnsealedSectorPath文件存在，并且是CC时则自动启用fastAddPiece
+export UNSEALED_SECTOR_PATH=/media/nvme/s-t01000-0
 
 nohup lotus-worker --worker-repo=$repo_dir run --listen=$listen --commit=false >> $base_dir/worker.log 2>&1 &
