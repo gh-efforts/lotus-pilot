@@ -1,1 +1,0 @@
-echo `hostname` " " `hostname -I`

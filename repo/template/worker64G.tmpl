@@ -49,16 +49,19 @@ export PC1_64G_MAX_CONCURRENT=14
 export PC1_64G_MAX_PARALLELISM=1
 
 # 设置 PC2 的并行数量， 必须设置，根据配置情况提前计算好
-if [[ $gpu_number > 1 ]];then
-        export PC2_64G_MAX_CONCURRENT=1
+
+export PC2_64G_MAX_CONCURRENT=1
+
+if [[ $gpu_number == 1 ]];then
+        export PC2_64G_GPU_UTILIZATION=1
+elif [[ $gpu_number > 1 ]];then
+        export PC2_64G_GPU_UTILIZATION=2
         export CUDA_VISIBLE_DEVICES=0,1
 fi
 
 # 设置 PC2 的CPU使用数量，必须设置，默认设置为是2, 一般不需要修改
 export PC2_64G_MAX_PARALLELISM_GPU=2
 
-# 设置 PC2 的GPU使用数量，必须设置，默认设置为是1, 一般不需要修改
-export PC2_64G_GPU_UTILIZATION=1
 
 # 设置 AP 任务并行数， 设置为1， 一般不需要修改。
 export AP_64G_MAX_CONCURRENT=1
@@ -81,5 +84,7 @@ export P2_SEPARATE_LOG_PATH=$log_dir
 #默认位置：/media/nvme/s-t01000-0
 #当UnsealedSectorPath文件存在，并且是CC时则自动启用fastAddPiece
 export UNSEALED_SECTOR_PATH=/media/nvme/s-t01000-0
+export ENABLE_IOURING=1
+export VERIFY_SYNTH_PROOFS_COUNT=3000
 
 nohup lotus-worker --worker-repo=$repo_dir run --listen=$listen --commit=false >> $base_dir/worker.log 2>&1 &
