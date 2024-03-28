@@ -1,6 +1,6 @@
 package build
 
-const BuildVersion = "0.0.1"
+const BuildVersion = "0.0.2"
 
 var CurrentCommit string
 var BuildType = "+mainnet"
