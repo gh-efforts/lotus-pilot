@@ -89,4 +89,7 @@ export UNSEALED_SECTOR_PATH=/media/nvme/s-t01000-0
 export ENABLE_IOURING=1
 export VERIFY_SYNTH_PROOFS_COUNT=3000
 
-nohup lotus-worker --worker-repo=$repo_dir run --listen=$listen --commit=false >> $base_dir/worker.log 2>&1 &
+# 开启SynthPoRep
+export LOTUS_SEALING_USESYNTHETICPOREP=true
+
+nohup lotus-worker --worker-repo=$repo_dir run --listen=$listen --commit=false --prove-replica-update2=false >> $base_dir/worker.log 2>&1 &
