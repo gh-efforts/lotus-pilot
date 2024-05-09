@@ -2,7 +2,6 @@ package miner
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -102,7 +101,14 @@ func (m *Miner) removeHandle(w http.ResponseWriter, r *http.Request) {
 func (m *Miner) listHandle(w http.ResponseWriter, r *http.Request) {
 	log.Debugw("listHandle", "path", r.URL.Path)
 
-	w.Write([]byte(fmt.Sprintf("%s", m.list())))
+	miners := m.list()
+
+	body, err := json.Marshal(&miners)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(body)
 }
 
 func (m *Miner) workerHandle(w http.ResponseWriter, r *http.Request) {
@@ -208,7 +214,14 @@ func (m *Miner) removeSwitchHandle(w http.ResponseWriter, r *http.Request) {
 func (m *Miner) listSwitchHandle(w http.ResponseWriter, r *http.Request) {
 	log.Debugw("listSwitchHandle", "path", r.URL.Path)
 
-	w.Write([]byte(fmt.Sprintf("%s", m.listSwitch())))
+	ss := m.listSwitch()
+
+	body, err := json.Marshal(&ss)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(body)
 }
 
 func (m *Miner) createScriptHandle(w http.ResponseWriter, r *http.Request) {

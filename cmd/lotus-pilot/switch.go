@@ -223,14 +223,22 @@ var switchListCmd = &cli.Command{
 		}
 		defer resp.Body.Close()
 
-		r, err := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK {
+			r, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("status: %s msg: %s", resp.Status, string(r))
+		}
+
+		var ss []string
+		err = json.NewDecoder(resp.Body).Decode(&ss)
 		if err != nil {
 			return err
 		}
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("status: %s msg: %s", resp.Status, string(r))
-		}
-		fmt.Println(string(r))
+
+		fmt.Println(ss)
+
 		return nil
 	},
 }
