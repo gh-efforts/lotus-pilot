@@ -3,7 +3,6 @@ package miner
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/gh-efforts/lotus-pilot/repo/config"
@@ -16,18 +15,18 @@ type MinerAPI struct {
 }
 
 func (m *Miner) Handle() {
-	http.HandleFunc("/miner/add", middlewareTimer(m.addHandle))
-	http.HandleFunc("/miner/remove/", middlewareTimer(m.removeHandle))
-	http.HandleFunc("/miner/list", middlewareTimer(m.listHandle))
-	http.HandleFunc("/miner/worker/", middlewareTimer(m.workerHandle))
+	http.HandleFunc("POST /miner/add", middlewareTimer(m.addHandle))
+	http.HandleFunc("GET /miner/remove/{id}", middlewareTimer(m.removeHandle))
+	http.HandleFunc("GET /miner/list", middlewareTimer(m.listHandle))
+	http.HandleFunc("GET /miner/worker/{id}", middlewareTimer(m.workerHandle))
 
-	http.HandleFunc("/switch/new", middlewareTimer(m.switchHandle))
-	http.HandleFunc("/switch/get/", middlewareTimer(m.getSwitchHandle))
-	http.HandleFunc("/switch/cancel/", middlewareTimer(m.cancelSwitchHandle))
-	http.HandleFunc("/switch/remove/", middlewareTimer(m.removeSwitchHandle))
-	http.HandleFunc("/switch/list", middlewareTimer(m.listSwitchHandle))
+	http.HandleFunc("POST /switch/new", middlewareTimer(m.switchHandle))
+	http.HandleFunc("GET /switch/get/{id}", middlewareTimer(m.getSwitchHandle))
+	http.HandleFunc("GET /switch/cancel/{id}", middlewareTimer(m.cancelSwitchHandle))
+	http.HandleFunc("GET /switch/remove/{id}", middlewareTimer(m.removeSwitchHandle))
+	http.HandleFunc("GET /switch/list", middlewareTimer(m.listSwitchHandle))
 
-	http.HandleFunc("/script/create/", middlewareTimer(m.createScriptHandle))
+	http.HandleFunc("GET /script/create/{id}", middlewareTimer(m.createScriptHandle))
 }
 
 func (m *Miner) addHandle(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +70,7 @@ func (m *Miner) addHandle(w http.ResponseWriter, r *http.Request) {
 
 func (m *Miner) removeHandle(w http.ResponseWriter, r *http.Request) {
 	log.Debugw("removeHandle", "path", r.URL.Path)
-	id := strings.TrimPrefix(r.URL.Path, "/miner/remove/")
+	id := r.PathValue("id")
 	maddr, err := address.NewFromString(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -114,7 +113,7 @@ func (m *Miner) listHandle(w http.ResponseWriter, r *http.Request) {
 func (m *Miner) workerHandle(w http.ResponseWriter, r *http.Request) {
 	log.Debugw("workerHandle", "path", r.URL.Path)
 
-	id := strings.TrimPrefix(r.URL.Path, "/miner/worker/")
+	id := r.PathValue("id")
 	maddr, err := address.NewFromString(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -164,14 +163,14 @@ func (m *Miner) switchHandle(w http.ResponseWriter, r *http.Request) {
 
 func (m *Miner) getSwitchHandle(w http.ResponseWriter, r *http.Request) {
 	log.Debugw("getSwitchHandle", "path", r.URL.Path)
-	s := strings.TrimPrefix(r.URL.Path, "/switch/get/")
-	id, err := uuid.Parse(s)
+	id := r.PathValue("id")
+	uid, err := uuid.Parse(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	body, err := json.Marshal(m.getSwitch(id))
+	body, err := json.Marshal(m.getSwitch(uid))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -181,14 +180,14 @@ func (m *Miner) getSwitchHandle(w http.ResponseWriter, r *http.Request) {
 
 func (m *Miner) cancelSwitchHandle(w http.ResponseWriter, r *http.Request) {
 	log.Debugw("cancelSwitchHandle", "path", r.URL.Path)
-	s := strings.TrimPrefix(r.URL.Path, "/switch/cancel/")
-	id, err := uuid.Parse(s)
+	id := r.PathValue("id")
+	uid, err := uuid.Parse(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	err = m.cancelSwitch(id)
+	err = m.cancelSwitch(uid)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -197,14 +196,14 @@ func (m *Miner) cancelSwitchHandle(w http.ResponseWriter, r *http.Request) {
 
 func (m *Miner) removeSwitchHandle(w http.ResponseWriter, r *http.Request) {
 	log.Debugw("removeSwitchHandle", "path", r.URL.Path)
-	s := strings.TrimPrefix(r.URL.Path, "/switch/remove/")
-	id, err := uuid.Parse(s)
+	id := r.PathValue("id")
+	uid, err := uuid.Parse(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	err = m.removeSwitch(id)
+	err = m.removeSwitch(uid)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -226,7 +225,7 @@ func (m *Miner) listSwitchHandle(w http.ResponseWriter, r *http.Request) {
 
 func (m *Miner) createScriptHandle(w http.ResponseWriter, r *http.Request) {
 	log.Debugw("createScriptHandle", "path", r.URL.Path)
-	id := strings.TrimPrefix(r.URL.Path, "/script/create/")
+	id := r.PathValue("id")
 	err := m.createScript(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
