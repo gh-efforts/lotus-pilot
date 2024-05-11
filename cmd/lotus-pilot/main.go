@@ -15,7 +15,7 @@ import (
 	cliutil "github.com/filecoin-project/lotus/cli/util"
 	"github.com/gh-efforts/lotus-pilot/build"
 	"github.com/gh-efforts/lotus-pilot/metrics"
-	"github.com/gh-efforts/lotus-pilot/miner"
+	"github.com/gh-efforts/lotus-pilot/pilot"
 	"github.com/gh-efforts/lotus-pilot/repo"
 
 	_ "net/http/pprof"
@@ -130,7 +130,7 @@ var runCmd = &cli.Command{
 			return nil
 		}
 
-		miner, err := miner.NewMiner(ctx, r)
+		p, err := pilot.NewPilot(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -139,7 +139,7 @@ var runCmd = &cli.Command{
 		log.Infow("pilot server", "listen", listen)
 
 		http.Handle("/metrics", exporter)
-		miner.Handle()
+		p.Handle()
 		server := &http.Server{
 			Addr: listen,
 		}
@@ -147,7 +147,7 @@ var runCmd = &cli.Command{
 		go func() {
 			<-ctx.Done()
 			log.Info("shutdown pilot server")
-			miner.Close()
+			p.Close()
 			server.Shutdown(ctx)
 		}()
 

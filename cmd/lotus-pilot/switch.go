@@ -8,7 +8,7 @@ import (
 	"net/http"
 
 	"github.com/filecoin-project/go-address"
-	"github.com/gh-efforts/lotus-pilot/miner"
+	"github.com/gh-efforts/lotus-pilot/pilot"
 	"github.com/google/uuid"
 	"github.com/urfave/cli/v2"
 )
@@ -69,7 +69,7 @@ var switchNewCmd = &cli.Command{
 			worker = append(worker, i)
 		}
 
-		req := miner.SwitchRequest{
+		req := pilot.SwitchRequest{
 			From:      from,
 			To:        to,
 			Count:     cctx.Int("count"),
@@ -97,7 +97,7 @@ var switchNewCmd = &cli.Command{
 			return fmt.Errorf("status: %s msg: %s", resp.Status, string(r))
 		}
 
-		var ss miner.SwitchState
+		var ss pilot.SwitchState
 		err = json.NewDecoder(resp.Body).Decode(&ss)
 		if err != nil {
 			return err
@@ -137,7 +137,7 @@ var switchGetCmd = &cli.Command{
 			return fmt.Errorf("status: %s msg: %s", resp.Status, string(r))
 		}
 
-		var ss miner.SwitchState
+		var ss pilot.SwitchState
 		err = json.NewDecoder(resp.Body).Decode(&ss)
 		if err != nil {
 			return err
@@ -243,7 +243,7 @@ var switchListCmd = &cli.Command{
 	},
 }
 
-func printSwitchState(ss miner.SwitchState) {
+func printSwitchState(ss pilot.SwitchState) {
 	fmt.Printf("switchID: %s\n", ss.ID)
 	fmt.Printf("state: %s\n", ss.State)
 	if ss.ErrMsg != "" {

@@ -1,4 +1,4 @@
-package miner
+package pilot
 
 import (
 	"context"
@@ -9,27 +9,16 @@ import (
 	"time"
 
 	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-jsonrpc"
-	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api/client"
-	"github.com/filecoin-project/lotus/api/v0api"
 	"github.com/gh-efforts/lotus-pilot/repo"
 	"github.com/gh-efforts/lotus-pilot/repo/config"
 	"github.com/google/uuid"
 	logging "github.com/ipfs/go-log/v2"
 )
 
-var log = logging.Logger("pilot/miner")
+var log = logging.Logger("pilot/pilot")
 
-type MinerInfo struct {
-	api     v0api.StorageMiner
-	closer  jsonrpc.ClientCloser
-	address address.Address
-	size    abi.SectorSize
-	token   string
-}
-
-type Miner struct {
+type Pilot struct {
 	ctx      context.Context
 	interval time.Duration
 
@@ -45,7 +34,7 @@ type Miner struct {
 	statsCache map[address.Address]workerStatsCache
 }
 
-func NewMiner(ctx context.Context, r *repo.Repo) (*Miner, error) {
+func NewPilot(ctx context.Context, r *repo.Repo) (*Pilot, error) {
 	conf, err := r.LoadConfig()
 	if err != nil {
 		return nil, err
@@ -76,7 +65,7 @@ func NewMiner(ctx context.Context, r *repo.Repo) (*Miner, error) {
 		return nil, err
 	}
 
-	m := &Miner{
+	p := &Pilot{
 		ctx:        ctx,
 		interval:   time.Duration(conf.Interval),
 		miners:     miners,
@@ -85,83 +74,42 @@ func NewMiner(ctx context.Context, r *repo.Repo) (*Miner, error) {
 		infoCache:  make(map[address.Address]workerInfoCache),
 		statsCache: make(map[address.Address]workerStatsCache),
 	}
-	m.run()
-	return m, nil
+	p.run()
+	return p, nil
 }
 
-func (m *Miner) run() {
+func (p *Pilot) run() {
 	go func() {
-		t := time.NewTicker(m.interval)
+		t := time.NewTicker(p.interval)
 		for {
 			select {
 			case <-t.C:
-				m.process()
-			case <-m.ctx.Done():
+				p.process()
+			case <-p.ctx.Done():
 				return
 			}
 		}
 	}()
 }
 
-func (m *Miner) add(mi MinerInfo) {
-	m.lk.Lock()
-	defer m.lk.Unlock()
+func (p *Pilot) Close() {
+	p.lk.Lock()
+	defer p.lk.Unlock()
 
-	m.miners[mi.address] = mi
-	log.Infof("add miner: %s", mi.address)
-}
-
-func (m *Miner) remove(ma address.Address) {
-	m.lk.Lock()
-	defer m.lk.Unlock()
-
-	if c := m.miners[ma].closer; c != nil {
-		log.Infow("remove closed miner api", "miner", ma)
-		c()
-	}
-
-	delete(m.miners, ma)
-	log.Infof("remove miner: %s", ma)
-}
-
-func (m *Miner) list() []string {
-	m.lk.RLock()
-	defer m.lk.RUnlock()
-
-	var miners []string
-	for miner := range m.miners {
-		miners = append(miners, miner.String())
-	}
-
-	return miners
-}
-
-func (m *Miner) has(ma address.Address) bool {
-	m.lk.RLock()
-	defer m.lk.RUnlock()
-
-	_, ok := m.miners[ma]
-	return ok
-}
-
-func (m *Miner) Close() {
-	m.lk.Lock()
-	defer m.lk.Unlock()
-
-	for _, miner := range m.miners {
+	for _, miner := range p.miners {
 		if miner.closer != nil {
 			miner.closer()
 		}
 	}
 }
 
-func (m *Miner) createScript(id string) error {
-	m.lk.Lock()
-	defer m.lk.Unlock()
+func (p *Pilot) createScript(id string) error {
+	p.lk.Lock()
+	defer p.lk.Unlock()
 
 	if id == "all" {
-		for _, mi := range m.miners {
-			err := m.repo.CreateScript(mi.address, mi.token, mi.size)
+		for _, mi := range p.miners {
+			err := p.repo.CreateScript(mi.address, mi.token, mi.size)
 			if err != nil {
 				return err
 			}
@@ -174,11 +122,11 @@ func (m *Miner) createScript(id string) error {
 	if err != nil {
 		return err
 	}
-	mi, ok := m.miners[maddr]
+	mi, ok := p.miners[maddr]
 	if !ok {
 		return fmt.Errorf("miner: %s not found", id)
 	}
-	err = m.repo.CreateScript(mi.address, mi.token, mi.size)
+	err = p.repo.CreateScript(mi.address, mi.token, mi.size)
 	if err != nil {
 		return err
 	}

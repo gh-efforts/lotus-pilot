@@ -1,4 +1,4 @@
-package miner
+package middleware
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"go.opencensus.io/tag"
 )
 
-func middlewareTimer(handler http.HandlerFunc) http.HandlerFunc {
+func Timer(handler http.HandlerFunc) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		ctx, _ := tag.New(context.Background(), tag.Upsert(metrics.Endpoint, endpoint(request.URL.Path)))
 		stop := metrics.Timer(ctx, metrics.APIRequestDuration)

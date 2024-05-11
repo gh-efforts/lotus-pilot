@@ -1,4 +1,4 @@
-package miner
+package pilot
 
 import (
 	"context"
@@ -64,7 +64,7 @@ func (s *SwitchState) disableAP(ctx context.Context) {
 	}
 }
 
-func (s *SwitchState) update(m *Miner) {
+func (s *SwitchState) update(m *Pilot) {
 	workerCompleted := 0
 	workerError := 0
 	for wid, ws := range s.Worker {
@@ -210,8 +210,8 @@ func (s *SwitchState) update(m *Miner) {
 	}
 }
 
-func (m *Miner) newSwitch(ctx context.Context, req SwitchRequest) (*SwitchState, error) {
-	worker, err := m.workerPick(req)
+func (p *Pilot) newSwitch(ctx context.Context, req SwitchRequest) (*SwitchState, error) {
+	worker, err := p.workerPick(req)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func (m *Miner) newSwitch(ctx context.Context, req SwitchRequest) (*SwitchState,
 
 	ss.disableAP(ctx)
 
-	err = m.addSwitch(ss)
+	err = p.addSwitch(ss)
 	if err != nil {
 		return nil, err
 	}
@@ -234,22 +234,22 @@ func (m *Miner) newSwitch(ctx context.Context, req SwitchRequest) (*SwitchState,
 	return ss, nil
 }
 
-func (m *Miner) process() {
-	m.swLk.Lock()
-	defer m.swLk.Unlock()
+func (p *Pilot) process() {
+	p.swLk.Lock()
+	defer p.swLk.Unlock()
 
 	needWrite := false
-	for _, ss := range m.switchs {
+	for _, ss := range p.switchs {
 		if ss.State != StateSwitching {
 			continue
 		}
 
-		ss.update(m)
+		ss.update(p)
 		needWrite = true
 	}
 
 	if needWrite {
-		err := m.writeSwitch()
+		err := p.writeSwitch()
 		if err != nil {
 			log.Error(err)
 		}
@@ -258,13 +258,13 @@ func (m *Miner) process() {
 
 // write switchs state to repo/state
 // caller need keep swLk lock
-func (m *Miner) writeSwitch() error {
-	data, err := json.Marshal(m.switchs)
+func (p *Pilot) writeSwitch() error {
+	data, err := json.Marshal(p.switchs)
 	if err != nil {
 		return err
 	}
 
-	err = m.repo.WriteSwitchState(data)
+	err = p.repo.WriteSwitchState(data)
 	if err != nil {
 		return err
 	}
@@ -272,64 +272,64 @@ func (m *Miner) writeSwitch() error {
 	return nil
 }
 
-func (m *Miner) addSwitch(ss *SwitchState) error {
-	m.swLk.Lock()
-	defer m.swLk.Unlock()
+func (p *Pilot) addSwitch(ss *SwitchState) error {
+	p.swLk.Lock()
+	defer p.swLk.Unlock()
 
-	m.switchs[ss.ID] = ss
+	p.switchs[ss.ID] = ss
 
-	return m.writeSwitch()
+	return p.writeSwitch()
 }
 
-func (m *Miner) cancelSwitch(id uuid.UUID) error {
-	m.swLk.Lock()
-	defer m.swLk.Unlock()
+func (p *Pilot) cancelSwitch(id uuid.UUID) error {
+	p.swLk.Lock()
+	defer p.swLk.Unlock()
 
-	ss, ok := m.switchs[id]
+	ss, ok := p.switchs[id]
 	if ok && ss.State == StateSwitching {
 		ss.State = StateCanceled
 		log.Infof("switch: %s canceled", ss.ID)
 	}
 
-	return m.writeSwitch()
+	return p.writeSwitch()
 }
 
-func (m *Miner) removeSwitch(id uuid.UUID) error {
-	m.swLk.Lock()
-	defer m.swLk.Unlock()
+func (p *Pilot) removeSwitch(id uuid.UUID) error {
+	p.swLk.Lock()
+	defer p.swLk.Unlock()
 
-	delete(m.switchs, id)
+	delete(p.switchs, id)
 	log.Infof("switch: %s deleted", id)
 
-	return m.writeSwitch()
+	return p.writeSwitch()
 }
 
-func (m *Miner) getSwitch(id uuid.UUID) *SwitchState {
-	m.swLk.RLock()
-	defer m.swLk.RUnlock()
+func (p *Pilot) getSwitch(id uuid.UUID) *SwitchState {
+	p.swLk.RLock()
+	defer p.swLk.RUnlock()
 
-	return m.switchs[id]
+	return p.switchs[id]
 }
 
-func (m *Miner) listSwitch() []string {
-	m.swLk.RLock()
-	defer m.swLk.RUnlock()
+func (p *Pilot) listSwitch() []string {
+	p.swLk.RLock()
+	defer p.swLk.RUnlock()
 
 	var out []string
-	for _, s := range m.switchs {
+	for _, s := range p.switchs {
 		out = append(out, s.ID.String())
 	}
 
 	return out
 }
 
-func (m *Miner) switchingWorkers() map[uuid.UUID]struct{} {
-	m.swLk.RLock()
-	defer m.swLk.RUnlock()
+func (p *Pilot) switchingWorkers() map[uuid.UUID]struct{} {
+	p.swLk.RLock()
+	defer p.swLk.RUnlock()
 
 	out := map[uuid.UUID]struct{}{}
 
-	for _, s := range m.switchs {
+	for _, s := range p.switchs {
 		for w, ws := range s.Worker {
 			if ws.State != StateWorkerComplete {
 				out[w] = struct{}{}

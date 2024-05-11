@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"reflect"
 
-	"github.com/gh-efforts/lotus-pilot/miner"
+	"github.com/gh-efforts/lotus-pilot/pilot"
 	"github.com/gh-efforts/lotus-pilot/repo/config"
 	"github.com/google/uuid"
 	"github.com/urfave/cli/v2"
@@ -58,7 +58,7 @@ var minerAddCmd = &cli.Command{
 			Addr:  addr,
 			Token: token,
 		}
-		miner := miner.MinerAPI{
+		miner := pilot.MinerAPI{
 			Miner: id,
 			API:   api,
 		}
@@ -177,7 +177,7 @@ var minerWorkerCmd = &cli.Command{
 			return fmt.Errorf("status: %s msg: %s", resp.Status, string(r))
 		}
 
-		var wi map[uuid.UUID]miner.WorkerInfo
+		var wi map[uuid.UUID]pilot.WorkerInfo
 		err = json.NewDecoder(resp.Body).Decode(&wi)
 		if err != nil {
 			return err
@@ -188,7 +188,7 @@ var minerWorkerCmd = &cli.Command{
 	},
 }
 
-func printWorkerInfo(wi map[uuid.UUID]miner.WorkerInfo) {
+func printWorkerInfo(wi map[uuid.UUID]pilot.WorkerInfo) {
 	for _, w := range wi {
 		fmt.Printf("WorkerID: %s\n", w.WorkerID)
 		fmt.Printf("StorageID: %s\n", w.StorageID)

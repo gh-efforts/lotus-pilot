@@ -1,4 +1,4 @@
-package miner
+package pilot
 
 import (
 	"encoding/json"
@@ -133,26 +133,26 @@ func (w *WorkerInfo) canStop() bool {
 	return all+len(w.Sectors) == 0
 }
 
-func (m *Miner) workerInfoAPI(ma address.Address) (wst, jobs, sts, SchedDiagInfo, error) {
-	m.lk.RLock()
-	defer m.lk.RUnlock()
+func (p *Pilot) workerInfoAPI(ma address.Address) (wst, jobs, sts, SchedDiagInfo, error) {
+	p.lk.RLock()
+	defer p.lk.RUnlock()
 
-	mi, ok := m.miners[ma]
+	mi, ok := p.miners[ma]
 	if !ok {
 		return nil, nil, nil, SchedDiagInfo{}, fmt.Errorf("not found miner: %s", ma)
 	}
 
-	wst, err := mi.api.WorkerStats(m.ctx)
+	wst, err := mi.api.WorkerStats(p.ctx)
 	if err != nil {
 		return nil, nil, nil, SchedDiagInfo{}, err
 	}
 
-	jobs, err := mi.api.WorkerJobs(m.ctx)
+	jobs, err := mi.api.WorkerJobs(p.ctx)
 	if err != nil {
 		return nil, nil, nil, SchedDiagInfo{}, err
 	}
 
-	sts, err := mi.api.StorageList(m.ctx)
+	sts, err := mi.api.StorageList(p.ctx)
 	if err != nil {
 		return nil, nil, nil, SchedDiagInfo{}, err
 	}
@@ -161,7 +161,7 @@ func (m *Miner) workerInfoAPI(ma address.Address) (wst, jobs, sts, SchedDiagInfo
 		return wst, jobs, sts, SchedDiagInfo{}, nil
 	}
 
-	schedb, err := mi.api.SealingSchedDiag(m.ctx, false)
+	schedb, err := mi.api.SealingSchedDiag(p.ctx, false)
 	if err != nil {
 		return nil, nil, nil, SchedDiagInfo{}, err
 	}
@@ -181,18 +181,18 @@ func (m *Miner) workerInfoAPI(ma address.Address) (wst, jobs, sts, SchedDiagInfo
 	return wst, jobs, sts, b.SchedInfo, nil
 }
 
-func (m *Miner) getWorkerStats(ma address.Address) (map[uuid.UUID]storiface.WorkerStats, error) {
-	cache, ok := m.statsCache[ma]
+func (p *Pilot) getWorkerStats(ma address.Address) (map[uuid.UUID]storiface.WorkerStats, error) {
+	cache, ok := p.statsCache[ma]
 	if ok && time.Now().Before(cache.cacheTime.Add(CacheTimeout)) {
 		log.Debugw("getWorkerStats", "cacheTime", cache.cacheTime, "miner", ma)
 		return cache.worker, nil
 	}
 
-	worker, err := m.workerStats(ma)
+	worker, err := p.workerStats(ma)
 	if err != nil {
 		return nil, err
 	}
-	m.statsCache[ma] = workerStatsCache{
+	p.statsCache[ma] = workerStatsCache{
 		worker:    worker,
 		cacheTime: time.Now(),
 	}
@@ -200,18 +200,18 @@ func (m *Miner) getWorkerStats(ma address.Address) (map[uuid.UUID]storiface.Work
 	return worker, nil
 }
 
-func (m *Miner) getWorkerInfo(ma address.Address) (map[uuid.UUID]WorkerInfo, error) {
-	cache, ok := m.infoCache[ma]
+func (p *Pilot) getWorkerInfo(ma address.Address) (map[uuid.UUID]WorkerInfo, error) {
+	cache, ok := p.infoCache[ma]
 	if ok && time.Now().Before(cache.cacheTime.Add(CacheTimeout)) {
 		log.Debugw("getWorkerInfo", "cacheTime", cache.cacheTime, "miner", ma)
 		return cache.worker, nil
 	}
 
-	worker, err := m._getWorkerInfo(ma)
+	worker, err := p._getWorkerInfo(ma)
 	if err != nil {
 		return nil, err
 	}
-	m.infoCache[ma] = workerInfoCache{
+	p.infoCache[ma] = workerInfoCache{
 		worker:    worker,
 		cacheTime: time.Now(),
 	}
@@ -219,8 +219,8 @@ func (m *Miner) getWorkerInfo(ma address.Address) (map[uuid.UUID]WorkerInfo, err
 	return worker, nil
 }
 
-func (m *Miner) _getWorkerInfo(ma address.Address) (map[uuid.UUID]WorkerInfo, error) {
-	wst, jobs, sts, diag, err := m.workerInfoAPI(ma)
+func (p *Pilot) _getWorkerInfo(ma address.Address) (map[uuid.UUID]WorkerInfo, error) {
+	wst, jobs, sts, diag, err := p.workerInfoAPI(ma)
 	if err != nil {
 		return nil, err
 	}
@@ -307,16 +307,16 @@ func (m *Miner) _getWorkerInfo(ma address.Address) (map[uuid.UUID]WorkerInfo, er
 	return worker, nil
 }
 
-func (m *Miner) workerStats(ma address.Address) (wst, error) {
-	m.lk.RLock()
-	defer m.lk.RUnlock()
+func (p *Pilot) workerStats(ma address.Address) (wst, error) {
+	p.lk.RLock()
+	defer p.lk.RUnlock()
 
-	mi, ok := m.miners[ma]
+	mi, ok := p.miners[ma]
 	if !ok {
 		return nil, fmt.Errorf("not found miner: %s", ma)
 	}
 
-	wst, err := mi.api.WorkerStats(m.ctx)
+	wst, err := mi.api.WorkerStats(p.ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -324,13 +324,13 @@ func (m *Miner) workerStats(ma address.Address) (wst, error) {
 	return wst, nil
 }
 
-func (m *Miner) workerPick(req SwitchRequest) (map[uuid.UUID]*WorkerState, error) {
-	switchingWorkers := m.switchingWorkers()
+func (p *Pilot) workerPick(req SwitchRequest) (map[uuid.UUID]*WorkerState, error) {
+	switchingWorkers := p.switchingWorkers()
 	out := map[uuid.UUID]*WorkerState{}
 
 	if len(req.Worker) != 0 {
 		//specify worker from requst
-		wst, err := m.workerStats(req.From)
+		wst, err := p.workerStats(req.From)
 		if err != nil {
 			return nil, err
 		}
@@ -359,7 +359,7 @@ func (m *Miner) workerPick(req SwitchRequest) (map[uuid.UUID]*WorkerState, error
 
 	if req.Count == 0 {
 		//switch all worker
-		wst, err := m.workerStats(req.From)
+		wst, err := p.workerStats(req.From)
 		if err != nil {
 			return nil, err
 		}
@@ -379,7 +379,7 @@ func (m *Miner) workerPick(req SwitchRequest) (map[uuid.UUID]*WorkerState, error
 		return out, nil
 	}
 
-	worker, err := m._getWorkerInfo(req.From)
+	worker, err := p._getWorkerInfo(req.From)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-package miner
+package pilot
 
 import (
 	"context"
