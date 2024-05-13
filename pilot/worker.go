@@ -76,7 +76,7 @@ func (s StateWorker) String() string {
 	return stateWorkerNames[s]
 }
 
-const ErrTryCount = 10
+const ErrTryCount = 20
 
 type WorkerInfo struct {
 	WorkerID  uuid.UUID            `json:"workerID"`
@@ -182,6 +182,9 @@ func (p *Pilot) workerInfoAPI(ma address.Address) (wst, jobs, sts, SchedDiagInfo
 }
 
 func (p *Pilot) getWorkerStats(ma address.Address) (map[uuid.UUID]storiface.WorkerStats, error) {
+	p.scLk.Lock()
+	defer p.scLk.Unlock()
+
 	cache, ok := p.statsCache[ma]
 	if ok && time.Now().Before(cache.cacheTime.Add(CacheTimeout)) {
 		log.Debugw("getWorkerStats", "cacheTime", cache.cacheTime, "miner", ma)
@@ -201,6 +204,9 @@ func (p *Pilot) getWorkerStats(ma address.Address) (map[uuid.UUID]storiface.Work
 }
 
 func (p *Pilot) getWorkerInfo(ma address.Address) (map[uuid.UUID]WorkerInfo, error) {
+	p.icLk.Lock()
+	defer p.icLk.Unlock()
+
 	cache, ok := p.infoCache[ma]
 	if ok && time.Now().Before(cache.cacheTime.Add(CacheTimeout)) {
 		log.Debugw("getWorkerInfo", "cacheTime", cache.cacheTime, "miner", ma)

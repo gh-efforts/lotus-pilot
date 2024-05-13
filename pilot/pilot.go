@@ -30,7 +30,10 @@ type Pilot struct {
 
 	repo *repo.Repo
 
-	infoCache  map[address.Address]workerInfoCache
+	icLk      sync.Mutex
+	infoCache map[address.Address]workerInfoCache
+
+	scLk       sync.Mutex
 	statsCache map[address.Address]workerStatsCache
 }
 
