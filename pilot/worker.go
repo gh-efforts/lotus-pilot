@@ -418,11 +418,15 @@ func (p *Pilot) workerPick(req SwitchRequest) (map[uuid.UUID]*WorkerState, error
 			return wi.sum("PC2") < wj.sum("PC2")
 		}
 
-		if wi.LastStart["PC1"].Equal(wj.LastStart["PC1"]) {
-			return wi.Hostname < wj.Hostname
+		if !wi.LastStart["PC1"].Equal(wj.LastStart["PC1"]) {
+			return wi.LastStart["PC1"].Before(wj.LastStart["PC1"])
 		}
 
-		return wi.LastStart["PC1"].Before(wj.LastStart["PC1"])
+		if len(wi.Sectors) != len(wj.Sectors) {
+			return len(wi.Sectors) < len(wj.Sectors)
+		}
+
+		return wi.Hostname < wj.Hostname
 	})
 
 	for _, w := range workerSort[0:req.Count] {
