@@ -19,8 +19,9 @@ import (
 var log = logging.Logger("pilot/pilot")
 
 type Pilot struct {
-	ctx      context.Context
-	interval time.Duration
+	ctx          context.Context
+	interval     time.Duration
+	cacheTimeout time.Duration
 
 	lk     sync.RWMutex
 	miners map[address.Address]MinerInfo
@@ -30,7 +31,10 @@ type Pilot struct {
 
 	repo *repo.Repo
 
-	infoCache  map[address.Address]workerInfoCache
+	icLk      sync.Mutex
+	infoCache map[address.Address]workerInfoCache
+
+	scLk       sync.Mutex
 	statsCache map[address.Address]workerStatsCache
 }
 
@@ -66,13 +70,14 @@ func NewPilot(ctx context.Context, r *repo.Repo) (*Pilot, error) {
 	}
 
 	p := &Pilot{
-		ctx:        ctx,
-		interval:   time.Duration(conf.Interval),
-		miners:     miners,
-		switchs:    switchs,
-		repo:       r,
-		infoCache:  make(map[address.Address]workerInfoCache),
-		statsCache: make(map[address.Address]workerStatsCache),
+		ctx:          ctx,
+		interval:     time.Duration(conf.Interval),
+		cacheTimeout: time.Duration(conf.CacheTimeout),
+		miners:       miners,
+		switchs:      switchs,
+		repo:         r,
+		infoCache:    make(map[address.Address]workerInfoCache),
+		statsCache:   make(map[address.Address]workerStatsCache),
 	}
 	p.run()
 	return p, nil

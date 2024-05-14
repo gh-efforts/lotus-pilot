@@ -1,6 +1,6 @@
 module github.com/gh-efforts/lotus-pilot
 
-go 1.21
+go 1.22
 
 toolchain go1.22.1
 

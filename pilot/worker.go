@@ -18,8 +18,6 @@ type wst = map[uuid.UUID]storiface.WorkerStats
 type jobs = map[uuid.UUID][]storiface.WorkerJob
 type sts = map[storiface.ID][]storiface.Decl
 
-const CacheTimeout = time.Second * 30
-
 type workerInfoCache struct {
 	worker    map[uuid.UUID]WorkerInfo
 	cacheTime time.Time
@@ -182,8 +180,11 @@ func (p *Pilot) workerInfoAPI(ma address.Address) (wst, jobs, sts, SchedDiagInfo
 }
 
 func (p *Pilot) getWorkerStats(ma address.Address) (map[uuid.UUID]storiface.WorkerStats, error) {
+	p.scLk.Lock()
+	defer p.scLk.Unlock()
+
 	cache, ok := p.statsCache[ma]
-	if ok && time.Now().Before(cache.cacheTime.Add(CacheTimeout)) {
+	if ok && time.Now().Before(cache.cacheTime.Add(p.cacheTimeout)) {
 		log.Debugw("getWorkerStats", "cacheTime", cache.cacheTime, "miner", ma)
 		return cache.worker, nil
 	}
@@ -201,8 +202,11 @@ func (p *Pilot) getWorkerStats(ma address.Address) (map[uuid.UUID]storiface.Work
 }
 
 func (p *Pilot) getWorkerInfo(ma address.Address) (map[uuid.UUID]WorkerInfo, error) {
+	p.icLk.Lock()
+	defer p.icLk.Unlock()
+
 	cache, ok := p.infoCache[ma]
-	if ok && time.Now().Before(cache.cacheTime.Add(CacheTimeout)) {
+	if ok && time.Now().Before(cache.cacheTime.Add(p.cacheTimeout)) {
 		log.Debugw("getWorkerInfo", "cacheTime", cache.cacheTime, "miner", ma)
 		return cache.worker, nil
 	}
@@ -396,6 +400,10 @@ func (p *Pilot) workerPick(req SwitchRequest) (map[uuid.UUID]*WorkerState, error
 		}
 
 		workerSort = append(workerSort, w)
+	}
+
+	if len(workerSort) < req.Count {
+		return nil, fmt.Errorf("not enough worker. miner: %s has(remove switching): %d need: %d", req.From, len(workerSort), req.Count)
 	}
 
 	sort.Slice(workerSort, func(i, j int) bool {

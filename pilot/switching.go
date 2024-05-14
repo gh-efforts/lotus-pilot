@@ -1,8 +1,9 @@
 package pilot
 
 import (
-	"context"
 	"encoding/json"
+	"fmt"
+	"sync"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/storage/sealer/sealtasks"
@@ -48,154 +49,165 @@ type SwitchState struct {
 	Worker map[uuid.UUID]*WorkerState `json:"worker"`
 }
 
-func (s *SwitchState) disableAP(ctx context.Context) {
-	for _, ws := range s.Worker {
-		if s.Req.DisableAP {
-			err := disableAPCmd(ctx, ws.Hostname, s.Req.From.String())
-			if err != nil {
-				log.Errorf("disableAPCmd", err.Error())
-				ws.updateErr(err.Error())
-				continue
-			}
-			ws.State = StateWorkerDisableAPConfirming
-		} else {
-			ws.State = StateWorkerSwitchWaiting
-		}
-	}
-}
-
 func (s *SwitchState) update(m *Pilot) {
-	workerCompleted := 0
-	workerError := 0
+	var wg sync.WaitGroup
+
 	for wid, ws := range s.Worker {
-		switch ws.State {
-		case StateWorkerPicked:
-			if s.Req.DisableAP {
-				err := disableAPCmd(m.ctx, ws.Hostname, s.Req.From.String())
+		//skip complete or error
+		if ws.State == StateWorkerComplete || ws.State == StateWorkerError {
+			continue
+		}
+
+		wg.Add(1)
+		go func(wid uuid.UUID, ws *WorkerState) {
+			defer wg.Done()
+			//for{}
+			switch ws.State {
+			case StateWorkerPicked:
+				if s.Req.DisableAP {
+					err := disableAPCmd(m.ctx, ws.Hostname, s.Req.From.String())
+					if err != nil {
+						log.Errorw("disableAPCmd", "switchID", s.ID, "workerID", wid, "err", err.Error())
+						ws.updateErr(err.Error())
+						return
+					}
+					log.Debugw("disableAPCmd to confirming", "switchID", s.ID, "workerID", wid)
+					ws.State = StateWorkerDisableAPConfirming
+				} else {
+					log.Debugw("no need disableAP to switching", "switchID", s.ID, "workerID", wid)
+					ws.State = StateWorkerSwitchWaiting
+				}
+			case StateWorkerDisableAPConfirming:
+				worker, err := m.getWorkerStats(s.Req.From)
 				if err != nil {
-					log.Errorf("disableAPCmd", err.Error())
-					ws.updateErr(err.Error())
-					continue
+					log.Errorw("getWorkerStats", "wid", wid, "from", s.Req.From, "err", err)
+					return
 				}
-				ws.State = StateWorkerDisableAPConfirming
-			} else {
-				ws.State = StateWorkerSwitchWaiting
-			}
-		case StateWorkerDisableAPConfirming:
-			worker, err := m.getWorkerStats(s.Req.From)
-			if err != nil {
-				log.Errorf("miner: %s getWorkerStats: %s", s.Req.From, err)
-				continue
-			}
-			w, ok := worker[wid]
-			if !ok {
-				log.Errorf("not found workerID: %s", wid)
-				continue
-			}
-			hasAP := false
-			for _, t := range w.Tasks {
-				if t == sealtasks.TTAddPiece {
-					hasAP = true
+				w, ok := worker[wid]
+				if !ok {
+					errMsg := fmt.Sprintf("not found workerID: %s", wid)
+					log.Error(errMsg)
+					ws.updateErr(errMsg)
+					return
 				}
-			}
-			if hasAP {
-				log.Infow("disableAP retry", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
-				err := disableAPCmd(m.ctx, ws.Hostname, s.Req.From.String())
-				if err != nil {
-					log.Errorf("disableAPCmd", err.Error())
-					ws.updateErr(err.Error())
-					continue
+
+				for _, t := range w.Tasks {
+					if t == sealtasks.TTAddPiece {
+						errMsg := fmt.Sprintf("DisableAPConfirming still has AP task: %s", wid)
+						log.Error(errMsg)
+						ws.updateErr(errMsg)
+						return
+					}
 				}
-				ws.updateErr("disableAP retry")
-			} else {
+
 				log.Infow("disableAP success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
 				ws.State = StateWorkerSwitchWaiting
-			}
-		case StateWorkerSwitchWaiting:
-			worker, err := m.getWorkerInfo(s.Req.From)
-			if err != nil {
-				log.Errorf("miner: %s getWorkerInfo: %s", s.Req.From, err)
-				continue
-			}
-			w, ok := worker[wid]
-			if !ok {
-				log.Errorf("not found workerID: %s", wid)
-				continue
-			}
-			if w.canSwitch() {
-				err := workerRunCmd(m.ctx, w.Hostname, s.Req.To.String(), m.repo.ScriptsPath())
+			case StateWorkerSwitchWaiting:
+				worker, err := m.getWorkerInfo(s.Req.From)
 				if err != nil {
-					log.Errorf("workerRunCmd", err.Error())
-					ws.updateErr(err.Error())
-					continue
+					log.Errorw("getWorkerInfo", "wid", wid, "from", s.Req.From, "err", err)
+					return
 				}
+				w, ok := worker[wid]
+				if !ok {
+					errMsg := fmt.Sprintf("not found workerID: %s", wid)
+					log.Error(errMsg)
+					ws.updateErr(errMsg)
+					return
+				}
+				if !w.canSwitch() {
+					log.Debugw("Switching conditions not met", "switchID", s.ID, "workerID", ws.WorkerID)
+					return
+				}
+				//32G 切换到 64G miner 时需要设置巨页，启动脚本耗时3分钟
+				go func() {
+					err := workerRunCmd(m.ctx, w.Hostname, s.Req.To.String(), m.repo.ScriptsPath())
+					if err != nil {
+						log.Errorw("workerRunCmd", "switchID", s.ID, "wid", wid, "to", s.Req.To, "err", err.Error())
+						//ws.updateErr(err.Error())
+						//return
+					}
+				}()
+
+				log.Debugw("workerRunCmd background", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname, "to", s.Req.To)
 				ws.State = StateWorkerSwitchConfirming
-			}
-		case StateWorkerSwitchConfirming:
-			worker, err := m.getWorkerStats(s.Req.To)
-			if err != nil {
-				log.Errorf("miner: %s getWorkerStats: %s", s.Req.From, err)
-				continue
-			}
-			has := false
-			for _, w := range worker {
-				if w.Info.Hostname == ws.Hostname {
-					has = true
-					break
+			case StateWorkerSwitchConfirming:
+				worker, err := m.getWorkerStats(s.Req.To)
+				if err != nil {
+					log.Errorw("getWorkerStats", "wid", wid, "from", s.Req.From, "err", err)
+					return
 				}
-			}
-			if has {
-				log.Infow("switch success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
+				has := false
+				for _, w := range worker {
+					if w.Info.Hostname == ws.Hostname {
+						has = true
+						break
+					}
+				}
+				if !has {
+					errMsg := fmt.Sprintf("worker: %s not found in miner: %s", ws.Hostname, s.Req.To)
+					log.Error(errMsg)
+					ws.updateErr(errMsg)
+					return
+				}
+				log.Infow("switch success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname, "to", s.Req.To)
 				ws.State = StateWorkerStopWaiting
-			} else {
-				log.Warnw("switch failed", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
-				//TODO: re-switch
-			}
-		case StateWorkerStopWaiting:
-			worker, err := m.getWorkerInfo(s.Req.From)
-			if err != nil {
-				log.Errorf("miner: %s getWorkerInfo: %s", s.Req.From, err)
-				continue
-			}
-			w, ok := worker[wid]
-			if !ok {
-				log.Errorf("not found workerID: %s", wid)
-				continue
-			}
-			if w.canStop() {
-				err := workerStopCmd(m.ctx, ws.Hostname, s.Req.From.String())
+			case StateWorkerStopWaiting:
+				worker, err := m.getWorkerInfo(s.Req.From)
 				if err != nil {
-					log.Errorf("workerStopCmd", err.Error())
-					ws.updateErr(err.Error())
-					continue
+					log.Errorw("getWorkerInfo", "wid", wid, "from", s.Req.From, "err", err)
+					return
 				}
+				w, ok := worker[wid]
+				if !ok {
+					errMsg := fmt.Sprintf("not found workerID: %s", wid)
+					log.Error(errMsg)
+					ws.updateErr(errMsg)
+					return
+				}
+				if !w.canStop() {
+					log.Debugw("Stoping conditions not met", "switchID", s.ID, "workerID", ws.WorkerID)
+					return
+				}
+				err = workerStopCmd(m.ctx, ws.Hostname, s.Req.From.String())
+				if err != nil {
+					log.Errorw("workerStopCmd", "wid", wid, "from", s.Req.From, "err", err.Error())
+					ws.updateErr(err.Error())
+					return
+				}
+				log.Debugw("workerStopCmd", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname, "from", s.Req.From)
 				ws.State = StateWorkerStopConfirming
-			}
-		case StateWorkerStopConfirming:
-			worker, err := m.getWorkerStats(s.Req.From)
-			if err != nil {
-				log.Errorf("miner: %s getWorkerStats: %s", s.Req.From, err)
-				continue
-			}
-			if _, ok := worker[wid]; ok {
-				log.Infow("stop retry", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
-				err := workerStopCmd(m.ctx, ws.Hostname, s.Req.From.String())
+			case StateWorkerStopConfirming:
+				worker, err := m.getWorkerStats(s.Req.From)
 				if err != nil {
-					log.Errorf("workerStopCmd", err.Error())
-					ws.updateErr(err.Error())
-					continue
+					log.Errorw("getWorkerStats", "wid", wid, "from", s.Req.From, "err", err)
+					return
 				}
-				ws.updateErr("stop retry")
-			} else {
-				log.Infow("stop success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
+				if _, ok := worker[wid]; ok {
+					errMsg := fmt.Sprintf("worker: %s still in miner: %s", wid, s.Req.From)
+					log.Error(errMsg)
+					ws.updateErr(errMsg)
+					return
+				}
+				log.Infow("stop success", "switchID", s.ID, "wid", ws.WorkerID, "hostname", ws.Hostname)
 				ws.State = StateWorkerComplete
+			case StateWorkerComplete:
+			case StateWorkerError:
+			default:
+				log.Warnw("unknown worker state", "switchID", s.ID, "wid", ws.WorkerID, "worker state", ws.State)
 			}
-		case StateWorkerComplete:
+		}(wid, ws)
+	}
+	wg.Wait()
+
+	workerCompleted := 0
+	workerError := 0
+	for _, ws := range s.Worker {
+		if ws.State == StateWorkerComplete {
 			workerCompleted += 1
-		case StateWorkerError:
+		}
+		if ws.State == StateWorkerError {
 			workerError += 1
-		default:
-			log.Warnw("switch state", "id", s.ID, "workerID", ws.WorkerID, "worker state", ws.State)
 		}
 	}
 
@@ -210,7 +222,7 @@ func (s *SwitchState) update(m *Pilot) {
 	}
 }
 
-func (p *Pilot) newSwitch(ctx context.Context, req SwitchRequest) (*SwitchState, error) {
+func (p *Pilot) newSwitch(req SwitchRequest) (*SwitchState, error) {
 	worker, err := p.workerPick(req)
 	if err != nil {
 		return nil, err
@@ -222,8 +234,6 @@ func (p *Pilot) newSwitch(ctx context.Context, req SwitchRequest) (*SwitchState,
 		Req:    req,
 		Worker: worker,
 	}
-
-	ss.disableAP(ctx)
 
 	err = p.addSwitch(ss)
 	if err != nil {
