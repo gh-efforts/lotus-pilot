@@ -51,12 +51,17 @@ type SwitchState struct {
 
 func (s *SwitchState) update(m *Pilot) {
 	var wg sync.WaitGroup
-	wg.Add(len(s.Worker))
 
 	for wid, ws := range s.Worker {
+		//skip complete or error
+		if ws.State == StateWorkerComplete || ws.State == StateWorkerError {
+			continue
+		}
+
+		wg.Add(1)
 		go func(wid uuid.UUID, ws *WorkerState) {
 			defer wg.Done()
-
+			//for{}
 			switch ws.State {
 			case StateWorkerPicked:
 				if s.Req.DisableAP {
@@ -114,12 +119,17 @@ func (s *SwitchState) update(m *Pilot) {
 					log.Debugw("Switching conditions not met", "switchID", s.ID, "workerID", ws.WorkerID)
 					return
 				}
-				err = workerRunCmd(m.ctx, w.Hostname, s.Req.To.String(), m.repo.ScriptsPath())
-				if err != nil {
-					log.Errorw("workerRunCmd", "wid", wid, "to", s.Req.To, "err", err.Error())
-					ws.updateErr(err.Error())
-					return
-				}
+				//32G 切换到 64G miner 时需要设置巨页，启动脚本耗时3分钟
+				go func() {
+					err := workerRunCmd(m.ctx, w.Hostname, s.Req.To.String(), m.repo.ScriptsPath())
+					if err != nil {
+						log.Errorw("workerRunCmd", "switchID", s.ID, "wid", wid, "to", s.Req.To, "err", err.Error())
+						//ws.updateErr(err.Error())
+						//return
+					}
+				}()
+
+				log.Debugw("workerRunCmd background", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname, "to", s.Req.To)
 				ws.State = StateWorkerSwitchConfirming
 			case StateWorkerSwitchConfirming:
 				worker, err := m.getWorkerStats(s.Req.To)
@@ -165,6 +175,7 @@ func (s *SwitchState) update(m *Pilot) {
 					ws.updateErr(err.Error())
 					return
 				}
+				log.Debugw("workerStopCmd", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname, "from", s.Req.From)
 				ws.State = StateWorkerStopConfirming
 			case StateWorkerStopConfirming:
 				worker, err := m.getWorkerStats(s.Req.From)
