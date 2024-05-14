@@ -63,11 +63,11 @@ func LoadConfig(path string) (*Config, error) {
 
 func DefaultConfig() *Config {
 	miner := APIInfo{
-		Addr:  "10.122.1.29:2345",
+		Addr:  "10.122.6.17:2345",
 		Token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJBbGxvdyI6WyJyZWFkIiwid3JpdGUiLCJzaWduIiwiYWRtaW4iXX0.tlJ8d4RIudknLHrKDSjyKzfbh8hGp9Ez1FZszblQLAI",
 	}
 	miner64 := APIInfo{
-		Addr:  "10.122.1.29:2346",
+		Addr:  "10.122.6.17:2346",
 		Token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJBbGxvdyI6WyJyZWFkIiwid3JpdGUiLCJzaWduIiwiYWRtaW4iXX0.7ZoJAcyY9ictWUdWsiV5AwmSTPHCczkT8Y6mTiN3Azw",
 	}
 
