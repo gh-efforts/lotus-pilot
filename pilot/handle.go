@@ -31,7 +31,6 @@ func (p *Pilot) Handle() {
 }
 
 func (p *Pilot) addMinerHandle(w http.ResponseWriter, r *http.Request) {
-	log.Debugw("addHandle", "path", r.URL.Path)
 	var minerAPI MinerAPI
 	err := json.NewDecoder(r.Body).Decode(&minerAPI)
 	if err != nil {
@@ -70,7 +69,6 @@ func (p *Pilot) addMinerHandle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Pilot) removeMinerHandle(w http.ResponseWriter, r *http.Request) {
-	log.Debugw("removeHandle", "path", r.URL.Path)
 	id := r.PathValue("id")
 	maddr, err := address.NewFromString(id)
 	if err != nil {
@@ -99,8 +97,6 @@ func (p *Pilot) removeMinerHandle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Pilot) listMinerHandle(w http.ResponseWriter, r *http.Request) {
-	log.Debugw("listHandle", "path", r.URL.Path)
-
 	miners := p.listMiner()
 
 	body, err := json.Marshal(&miners)
@@ -112,8 +108,6 @@ func (p *Pilot) listMinerHandle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Pilot) workerHandle(w http.ResponseWriter, r *http.Request) {
-	log.Debugw("workerHandle", "path", r.URL.Path)
-
 	id := r.PathValue("id")
 	maddr, err := address.NewFromString(id)
 	if err != nil {
@@ -140,7 +134,6 @@ func (p *Pilot) workerHandle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Pilot) switchHandle(w http.ResponseWriter, r *http.Request) {
-	log.Debugw("switchHandle", "path", r.URL.Path)
 	var req SwitchRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -163,7 +156,6 @@ func (p *Pilot) switchHandle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Pilot) getSwitchHandle(w http.ResponseWriter, r *http.Request) {
-	log.Debugw("getSwitchHandle", "path", r.URL.Path)
 	id := r.PathValue("id")
 	uid, err := uuid.Parse(id)
 	if err != nil {
@@ -180,7 +172,6 @@ func (p *Pilot) getSwitchHandle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Pilot) cancelSwitchHandle(w http.ResponseWriter, r *http.Request) {
-	log.Debugw("cancelSwitchHandle", "path", r.URL.Path)
 	id := r.PathValue("id")
 	uid, err := uuid.Parse(id)
 	if err != nil {
@@ -196,7 +187,6 @@ func (p *Pilot) cancelSwitchHandle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Pilot) removeSwitchHandle(w http.ResponseWriter, r *http.Request) {
-	log.Debugw("removeSwitchHandle", "path", r.URL.Path)
 	id := r.PathValue("id")
 	uid, err := uuid.Parse(id)
 	if err != nil {
@@ -212,8 +202,6 @@ func (p *Pilot) removeSwitchHandle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Pilot) listSwitchHandle(w http.ResponseWriter, r *http.Request) {
-	log.Debugw("listSwitchHandle", "path", r.URL.Path)
-
 	ss := p.listSwitch()
 
 	body, err := json.Marshal(&ss)
@@ -225,7 +213,6 @@ func (p *Pilot) listSwitchHandle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Pilot) createScriptHandle(w http.ResponseWriter, r *http.Request) {
-	log.Debugw("createScriptHandle", "path", r.URL.Path)
 	id := r.PathValue("id")
 	err := p.createScript(id)
 	if err != nil {

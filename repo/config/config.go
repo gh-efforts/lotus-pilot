@@ -42,8 +42,9 @@ func (a *APIInfo) ToAPIInfo() string {
 }
 
 type Config struct {
-	Interval Duration           `json:"interval"`
-	Miners   map[string]APIInfo `json:"miners"`
+	Interval     Duration           `json:"interval"`
+	CacheTimeout Duration           `json:"cacheTimeout"`
+	Miners       map[string]APIInfo `json:"miners"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -76,7 +77,8 @@ func DefaultConfig() *Config {
 	miners["t028064"] = miner64
 
 	return &Config{
-		Interval: Duration(time.Minute),
-		Miners:   miners,
+		Interval:     Duration(time.Minute),
+		CacheTimeout: Duration(time.Second * 30),
+		Miners:       miners,
 	}
 }

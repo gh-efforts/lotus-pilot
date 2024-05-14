@@ -57,133 +57,133 @@ func (s *SwitchState) update(m *Pilot) {
 		go func(wid uuid.UUID, ws *WorkerState) {
 			defer wg.Done()
 
-			for {
-				switch ws.State {
-				case StateWorkerPicked:
-					if s.Req.DisableAP {
-						err := disableAPCmd(m.ctx, ws.Hostname, s.Req.From.String())
-						if err != nil {
-							log.Errorw("disableAPCmd", "switchID", s.ID, "workerID", wid, "err", err.Error())
-							ws.updateErr(err.Error())
-							return
-						}
-						ws.State = StateWorkerDisableAPConfirming
-					} else {
-						ws.State = StateWorkerSwitchWaiting
-					}
-				case StateWorkerDisableAPConfirming:
-					worker, err := m.getWorkerStats(s.Req.From)
+			switch ws.State {
+			case StateWorkerPicked:
+				if s.Req.DisableAP {
+					err := disableAPCmd(m.ctx, ws.Hostname, s.Req.From.String())
 					if err != nil {
-						log.Errorw("getWorkerStats", "wid", wid, "from", s.Req.From, "err", err)
+						log.Errorw("disableAPCmd", "switchID", s.ID, "workerID", wid, "err", err.Error())
+						ws.updateErr(err.Error())
 						return
 					}
-					w, ok := worker[wid]
-					if !ok {
-						errMsg := fmt.Sprintf("not found workerID: %s", wid)
-						log.Error(errMsg)
-						ws.updateErr(errMsg)
-						return
-					}
-
-					for _, t := range w.Tasks {
-						if t == sealtasks.TTAddPiece {
-							errMsg := fmt.Sprintf("DisableAPConfirming still has AP task: %s", wid)
-							log.Warn(errMsg)
-							ws.updateErr(errMsg)
-							return
-						}
-					}
-
-					log.Infow("disableAP success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
+					log.Debugw("disableAPCmd to confirming", "switchID", s.ID, "workerID", wid)
+					ws.State = StateWorkerDisableAPConfirming
+				} else {
+					log.Debugw("no need disableAP to switching", "switchID", s.ID, "workerID", wid)
 					ws.State = StateWorkerSwitchWaiting
-				case StateWorkerSwitchWaiting:
-					worker, err := m.getWorkerInfo(s.Req.From)
-					if err != nil {
-						log.Errorw("getWorkerInfo", "wid", wid, "from", s.Req.From, "err", err)
-						return
-					}
-					w, ok := worker[wid]
-					if !ok {
-						errMsg := fmt.Sprintf("not found workerID: %s", wid)
-						log.Error(errMsg)
-						ws.updateErr(errMsg)
-						return
-					}
-					if !w.canSwitch() {
-						log.Debugw("Switching conditions not met", "switchID", s.ID, "workerID", ws.WorkerID)
-						return
-					}
-					err = workerRunCmd(m.ctx, w.Hostname, s.Req.To.String(), m.repo.ScriptsPath())
-					if err != nil {
-						log.Errorw("workerRunCmd", "wid", wid, "to", s.Req.To, "err", err.Error())
-						ws.updateErr(err.Error())
-						return
-					}
-					ws.State = StateWorkerSwitchConfirming
-				case StateWorkerSwitchConfirming:
-					worker, err := m.getWorkerStats(s.Req.To)
-					if err != nil {
-						log.Errorw("getWorkerStats", "wid", wid, "from", s.Req.From, "err", err)
-						return
-					}
-					has := false
-					for _, w := range worker {
-						if w.Info.Hostname == ws.Hostname {
-							has = true
-							break
-						}
-					}
-					if !has {
-						errMsg := fmt.Sprintf("worker: %s not found in miner: %s", ws.Hostname, s.Req.To)
-						log.Warn(errMsg)
-						ws.updateErr(errMsg)
-						return
-					}
-					log.Infow("switch success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
-					ws.State = StateWorkerStopWaiting
-				case StateWorkerStopWaiting:
-					worker, err := m.getWorkerInfo(s.Req.From)
-					if err != nil {
-						log.Errorw("getWorkerInfo", "wid", wid, "from", s.Req.From, "err", err)
-						return
-					}
-					w, ok := worker[wid]
-					if !ok {
-						errMsg := fmt.Sprintf("not found workerID: %s", wid)
-						log.Error(errMsg)
-						ws.updateErr(errMsg)
-						return
-					}
-					if !w.canStop() {
-						log.Debugw("Stoping conditions not met", "switchID", s.ID, "workerID", ws.WorkerID)
-						return
-					}
-					err = workerStopCmd(m.ctx, ws.Hostname, s.Req.From.String())
-					if err != nil {
-						log.Errorw("workerStopCmd", "wid", wid, "from", s.Req.From, "err", err.Error())
-						ws.updateErr(err.Error())
-						return
-					}
-					ws.State = StateWorkerStopConfirming
-				case StateWorkerStopConfirming:
-					worker, err := m.getWorkerStats(s.Req.From)
-					if err != nil {
-						log.Errorw("getWorkerStats", "wid", wid, "from", s.Req.From, "err", err)
-						return
-					}
-					if _, ok := worker[wid]; ok {
-						errMsg := fmt.Sprintf("worker: %s still in miner: %s", wid, s.Req.From)
-						log.Warn(errMsg)
-						ws.updateErr(errMsg)
-						return
-					}
-					log.Infow("stop success", "switchID", s.ID, "wid", ws.WorkerID, "hostname", ws.Hostname)
-					ws.State = StateWorkerComplete
-				case StateWorkerComplete:
-				case StateWorkerError:
-				default:
-					log.Warnw("unknown switch state", "switchID", s.ID, "wid", ws.WorkerID, "worker state", ws.State)
 				}
+			case StateWorkerDisableAPConfirming:
+				worker, err := m.getWorkerStats(s.Req.From)
+				if err != nil {
+					log.Errorw("getWorkerStats", "wid", wid, "from", s.Req.From, "err", err)
+					return
+				}
+				w, ok := worker[wid]
+				if !ok {
+					errMsg := fmt.Sprintf("not found workerID: %s", wid)
+					log.Error(errMsg)
+					ws.updateErr(errMsg)
+					return
+				}
+
+				for _, t := range w.Tasks {
+					if t == sealtasks.TTAddPiece {
+						errMsg := fmt.Sprintf("DisableAPConfirming still has AP task: %s", wid)
+						log.Error(errMsg)
+						ws.updateErr(errMsg)
+						return
+					}
+				}
+
+				log.Infow("disableAP success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname)
+				ws.State = StateWorkerSwitchWaiting
+			case StateWorkerSwitchWaiting:
+				worker, err := m.getWorkerInfo(s.Req.From)
+				if err != nil {
+					log.Errorw("getWorkerInfo", "wid", wid, "from", s.Req.From, "err", err)
+					return
+				}
+				w, ok := worker[wid]
+				if !ok {
+					errMsg := fmt.Sprintf("not found workerID: %s", wid)
+					log.Error(errMsg)
+					ws.updateErr(errMsg)
+					return
+				}
+				if !w.canSwitch() {
+					log.Debugw("Switching conditions not met", "switchID", s.ID, "workerID", ws.WorkerID)
+					return
+				}
+				err = workerRunCmd(m.ctx, w.Hostname, s.Req.To.String(), m.repo.ScriptsPath())
+				if err != nil {
+					log.Errorw("workerRunCmd", "wid", wid, "to", s.Req.To, "err", err.Error())
+					ws.updateErr(err.Error())
+					return
+				}
+				ws.State = StateWorkerSwitchConfirming
+			case StateWorkerSwitchConfirming:
+				worker, err := m.getWorkerStats(s.Req.To)
+				if err != nil {
+					log.Errorw("getWorkerStats", "wid", wid, "from", s.Req.From, "err", err)
+					return
+				}
+				has := false
+				for _, w := range worker {
+					if w.Info.Hostname == ws.Hostname {
+						has = true
+						break
+					}
+				}
+				if !has {
+					errMsg := fmt.Sprintf("worker: %s not found in miner: %s", ws.Hostname, s.Req.To)
+					log.Error(errMsg)
+					ws.updateErr(errMsg)
+					return
+				}
+				log.Infow("switch success", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname, "to", s.Req.To)
+				ws.State = StateWorkerStopWaiting
+			case StateWorkerStopWaiting:
+				worker, err := m.getWorkerInfo(s.Req.From)
+				if err != nil {
+					log.Errorw("getWorkerInfo", "wid", wid, "from", s.Req.From, "err", err)
+					return
+				}
+				w, ok := worker[wid]
+				if !ok {
+					errMsg := fmt.Sprintf("not found workerID: %s", wid)
+					log.Error(errMsg)
+					ws.updateErr(errMsg)
+					return
+				}
+				if !w.canStop() {
+					log.Debugw("Stoping conditions not met", "switchID", s.ID, "workerID", ws.WorkerID)
+					return
+				}
+				err = workerStopCmd(m.ctx, ws.Hostname, s.Req.From.String())
+				if err != nil {
+					log.Errorw("workerStopCmd", "wid", wid, "from", s.Req.From, "err", err.Error())
+					ws.updateErr(err.Error())
+					return
+				}
+				ws.State = StateWorkerStopConfirming
+			case StateWorkerStopConfirming:
+				worker, err := m.getWorkerStats(s.Req.From)
+				if err != nil {
+					log.Errorw("getWorkerStats", "wid", wid, "from", s.Req.From, "err", err)
+					return
+				}
+				if _, ok := worker[wid]; ok {
+					errMsg := fmt.Sprintf("worker: %s still in miner: %s", wid, s.Req.From)
+					log.Error(errMsg)
+					ws.updateErr(errMsg)
+					return
+				}
+				log.Infow("stop success", "switchID", s.ID, "wid", ws.WorkerID, "hostname", ws.Hostname)
+				ws.State = StateWorkerComplete
+			case StateWorkerComplete:
+			case StateWorkerError:
+			default:
+				log.Warnw("unknown worker state", "switchID", s.ID, "wid", ws.WorkerID, "worker state", ws.State)
 			}
 		}(wid, ws)
 	}
