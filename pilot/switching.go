@@ -1,7 +1,6 @@
 package pilot
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -48,22 +47,6 @@ type SwitchState struct {
 	ErrMsg string                     `json:"errMsg"`
 	Req    SwitchRequest              `json:"req"`
 	Worker map[uuid.UUID]*WorkerState `json:"worker"`
-}
-
-func (s *SwitchState) disableAP(ctx context.Context) {
-	for _, ws := range s.Worker {
-		if s.Req.DisableAP {
-			err := disableAPCmd(ctx, ws.Hostname, s.Req.From.String())
-			if err != nil {
-				log.Errorf("disableAPCmd", err.Error())
-				ws.updateErr(err.Error())
-				continue
-			}
-			ws.State = StateWorkerDisableAPConfirming
-		} else {
-			ws.State = StateWorkerSwitchWaiting
-		}
-	}
 }
 
 func (s *SwitchState) update(m *Pilot) {
@@ -228,7 +211,7 @@ func (s *SwitchState) update(m *Pilot) {
 	}
 }
 
-func (p *Pilot) newSwitch(ctx context.Context, req SwitchRequest) (*SwitchState, error) {
+func (p *Pilot) newSwitch(req SwitchRequest) (*SwitchState, error) {
 	worker, err := p.workerPick(req)
 	if err != nil {
 		return nil, err
@@ -240,8 +223,6 @@ func (p *Pilot) newSwitch(ctx context.Context, req SwitchRequest) (*SwitchState,
 		Req:    req,
 		Worker: worker,
 	}
-
-	ss.disableAP(ctx)
 
 	err = p.addSwitch(ss)
 	if err != nil {

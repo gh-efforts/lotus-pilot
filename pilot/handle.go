@@ -148,7 +148,7 @@ func (p *Pilot) switchHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ss, err := p.newSwitch(r.Context(), req)
+	ss, err := p.newSwitch(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

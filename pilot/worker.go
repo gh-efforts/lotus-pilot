@@ -404,6 +404,10 @@ func (p *Pilot) workerPick(req SwitchRequest) (map[uuid.UUID]*WorkerState, error
 		workerSort = append(workerSort, w)
 	}
 
+	if len(workerSort) < req.Count {
+		return nil, fmt.Errorf("not enough worker. miner: %s has(remove switching): %d need: %d", req.From, len(worker), req.Count)
+	}
+
 	sort.Slice(workerSort, func(i, j int) bool {
 		wi := workerSort[i]
 		wj := workerSort[j]
