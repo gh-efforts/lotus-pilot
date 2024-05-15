@@ -296,10 +296,15 @@ func (p *Pilot) cancelSwitch(id uuid.UUID) error {
 	defer p.swLk.Unlock()
 
 	ss, ok := p.switchs[id]
-	if ok && ss.State == StateSwitching {
-		ss.State = StateCanceled
-		log.Infof("switch: %s canceled", ss.ID)
+	if !ok {
+		return fmt.Errorf("switchID: %s not found", id)
 	}
+	if ss.State != StateSwitching {
+		return fmt.Errorf("switch state: %s can not cancel", ss.State)
+	}
+
+	ss.State = StateCanceled
+	log.Infof("switch: %s canceled", ss.ID)
 
 	return p.writeSwitch()
 }
@@ -348,4 +353,22 @@ func (p *Pilot) switchingWorkers() map[uuid.UUID]struct{} {
 	}
 
 	return out
+}
+
+func (p *Pilot) resumeSwitch(id uuid.UUID) error {
+	p.swLk.Lock()
+	defer p.swLk.Unlock()
+
+	ss, ok := p.switchs[id]
+	if !ok {
+		return fmt.Errorf("switchID: %s not found", id)
+	}
+	if ss.State == StateSwitching || ss.State == StateComplete {
+		return fmt.Errorf("switch state: %s can not resume", ss.State)
+	}
+
+	ss.State = StateSwitching
+	log.Infof("switch: %s resumed", ss.ID)
+
+	return p.writeSwitch()
 }

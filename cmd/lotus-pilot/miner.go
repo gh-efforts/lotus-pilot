@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"reflect"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/gh-efforts/lotus-pilot/pilot"
 	"github.com/gh-efforts/lotus-pilot/repo/config"
 	"github.com/google/uuid"
@@ -86,20 +87,16 @@ var minerAddCmd = &cli.Command{
 }
 
 var minerRemoveCmd = &cli.Command{
-	Name:  "remove",
-	Usage: "remove miner",
-	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name: "miner-id",
-		},
-	},
+	Name:      "remove",
+	Usage:     "remove miner",
+	ArgsUsage: "[minerID]",
 	Action: func(cctx *cli.Context) error {
-		id := cctx.String("miner-id")
-		if id == "" {
-			return errors.New("miner-id is empty")
+		maddr, err := address.NewFromString(cctx.Args().First())
+		if err != nil {
+			return err
 		}
 
-		url := fmt.Sprintf("http://%s/miner/remove/%s", cctx.String("connect"), id)
+		url := fmt.Sprintf("http://%s/miner/remove/%s", cctx.String("connect"), maddr.String())
 		resp, err := http.Get(url)
 		if err != nil {
 			return err
@@ -149,20 +146,16 @@ var minerListCmd = &cli.Command{
 }
 
 var minerWorkerCmd = &cli.Command{
-	Name:  "worker",
-	Usage: "list miner workers",
-	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name: "miner-id",
-		},
-	},
+	Name:      "worker",
+	Usage:     "list miner workers",
+	ArgsUsage: "[minerID]",
 	Action: func(cctx *cli.Context) error {
-		id := cctx.String("miner-id")
-		if id == "" {
-			return errors.New("miner-id is empty")
+		maddr, err := address.NewFromString(cctx.Args().First())
+		if err != nil {
+			return err
 		}
 
-		url := fmt.Sprintf("http://%s/miner/worker/%s", cctx.String("connect"), id)
+		url := fmt.Sprintf("http://%s/miner/worker/%s", cctx.String("connect"), maddr.String())
 		resp, err := http.Get(url)
 		if err != nil {
 			return err

@@ -23,8 +23,9 @@ var scriptCmd = &cli.Command{
 }
 
 var scriptCreateCmd = &cli.Command{
-	Name:  "create",
-	Usage: "create worker start script(minerID/all)",
+	Name:      "create",
+	Usage:     "create worker start script",
+	ArgsUsage: "[minerID/all]",
 	Action: func(cctx *cli.Context) error {
 		url := fmt.Sprintf("http://%s/script/create/%s", cctx.String("connect"), cctx.Args().First())
 		resp, err := http.Get(url)
