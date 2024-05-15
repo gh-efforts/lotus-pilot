@@ -26,6 +26,7 @@ func (p *Pilot) Handle() {
 	http.HandleFunc("GET /switch/cancel/{id}", middleware.Timer(p.cancelSwitchHandle))
 	http.HandleFunc("GET /switch/remove/{id}", middleware.Timer(p.removeSwitchHandle))
 	http.HandleFunc("GET /switch/list", middleware.Timer(p.listSwitchHandle))
+	http.HandleFunc("GET /switch/resume/{id}", middleware.Timer(p.resumeSwitchHandle))
 
 	http.HandleFunc("GET /script/create/{id}", middleware.Timer(p.createScriptHandle))
 }
@@ -217,6 +218,21 @@ func (p *Pilot) createScriptHandle(w http.ResponseWriter, r *http.Request) {
 	err := p.createScript(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (p *Pilot) resumeSwitchHandle(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err = p.resumeSwitch(uid)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 }

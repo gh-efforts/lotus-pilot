@@ -22,6 +22,7 @@ var switchCmd = &cli.Command{
 		switchCancelCmd,
 		switchRemoveCmd,
 		switchListCmd,
+		switchResumeCmd,
 	},
 	Flags: []cli.Flag{
 		&cli.StringFlag{
@@ -109,15 +110,11 @@ var switchNewCmd = &cli.Command{
 }
 
 var switchGetCmd = &cli.Command{
-	Name:  "get",
-	Usage: "get switch state",
-	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name: "switch-id",
-		},
-	},
+	Name:      "get",
+	Usage:     "get switch state",
+	ArgsUsage: "[switchID]",
 	Action: func(cctx *cli.Context) error {
-		id, err := uuid.Parse(cctx.String("switch-id"))
+		id, err := uuid.Parse(cctx.Args().First())
 		if err != nil {
 			return err
 		}
@@ -149,15 +146,11 @@ var switchGetCmd = &cli.Command{
 }
 
 var switchCancelCmd = &cli.Command{
-	Name:  "cancel",
-	Usage: "cancel a switch",
-	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name: "switch-id",
-		},
-	},
+	Name:      "cancel",
+	Usage:     "cancel a switch",
+	ArgsUsage: "[switchID]",
 	Action: func(cctx *cli.Context) error {
-		id, err := uuid.Parse(cctx.String("switch-id"))
+		id, err := uuid.Parse(cctx.Args().First())
 		if err != nil {
 			return err
 		}
@@ -181,15 +174,11 @@ var switchCancelCmd = &cli.Command{
 }
 
 var switchRemoveCmd = &cli.Command{
-	Name:  "remove",
-	Usage: "remove switch",
-	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name: "switch-id",
-		},
-	},
+	Name:      "remove",
+	Usage:     "remove switch",
+	ArgsUsage: "[switchID]",
 	Action: func(cctx *cli.Context) error {
-		id, err := uuid.Parse(cctx.String("switch-id"))
+		id, err := uuid.Parse(cctx.Args().First())
 		if err != nil {
 			return err
 		}
@@ -239,6 +228,34 @@ var switchListCmd = &cli.Command{
 
 		fmt.Println(ss)
 
+		return nil
+	},
+}
+
+var switchResumeCmd = &cli.Command{
+	Name:      "resume",
+	Usage:     "resume a switch",
+	ArgsUsage: "[switchID]",
+	Action: func(cctx *cli.Context) error {
+		id, err := uuid.Parse(cctx.Args().First())
+		if err != nil {
+			return err
+		}
+
+		url := fmt.Sprintf("http://%s/switch/resume/%s", cctx.String("connect"), id)
+		resp, err := http.Get(url)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			r, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("status: %s msg: %s", resp.Status, string(r))
+		}
 		return nil
 	},
 }
