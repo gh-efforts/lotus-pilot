@@ -11,6 +11,7 @@ log_dir=$base_dir/log
 tmp_dir=$base_dir/tmp
 
 mkdir -p $repo_dir $log_dir $tmp_dir
+sync && echo 3 > /proc/sys/vm/drop_caches
 sysctl -w vm.nr_hugepages=851968
 # miner 的api信息，参考miner部署环节
 export MINER_API_INFO={{.MinerAPIInfo}}
