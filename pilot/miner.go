@@ -55,3 +55,20 @@ func (p *Pilot) hasMiner(ma address.Address) bool {
 	_, ok := p.miners[ma]
 	return ok
 }
+
+func (p *Pilot) minerWorkerAll() (map[string]int, error) {
+	p.lk.RLock()
+	defer p.lk.RUnlock()
+
+	out := map[string]int{}
+	for miner := range p.miners {
+		st, err := p.getWorkerStats(miner)
+		if err != nil {
+			return out, err
+		}
+
+		out[miner.String()] = len(st)
+	}
+
+	return out, nil
+}

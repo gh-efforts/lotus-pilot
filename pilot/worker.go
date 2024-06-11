@@ -193,12 +193,22 @@ func (p *Pilot) getWorkerStats(ma address.Address) (map[uuid.UUID]storiface.Work
 	if err != nil {
 		return nil, err
 	}
+
+	out := map[uuid.UUID]storiface.WorkerStats{}
+	for k, v := range worker {
+		if !workerCheck(v) {
+			log.Debugf("worker: %s skip", k)
+			continue
+		}
+		out[k] = v
+	}
+
 	p.statsCache[ma] = workerStatsCache{
-		worker:    worker,
+		worker:    out,
 		cacheTime: time.Now(),
 	}
 
-	return worker, nil
+	return out, nil
 }
 
 func (p *Pilot) getWorkerInfo(ma address.Address) (map[uuid.UUID]WorkerInfo, error) {
