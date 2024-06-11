@@ -20,6 +20,7 @@ func (p *Pilot) Handle() {
 	http.HandleFunc("GET /miner/remove/{id}", middleware.Timer(p.removeMinerHandle))
 	http.HandleFunc("GET /miner/list", middleware.Timer(p.listMinerHandle))
 	http.HandleFunc("GET /miner/worker/{id}", middleware.Timer(p.workerHandle))
+	http.HandleFunc("GET /miner/worker/all", middleware.Timer(p.minerWorkerAllHandle))
 
 	http.HandleFunc("POST /switch/new", middleware.Timer(p.switchHandle))
 	http.HandleFunc("GET /switch/get/{id}", middleware.Timer(p.getSwitchHandle))
@@ -126,6 +127,21 @@ func (p *Pilot) workerHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body, err := json.Marshal(&wi)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(body)
+}
+
+func (p *Pilot) minerWorkerAllHandle(w http.ResponseWriter, r *http.Request) {
+	out, err := p.minerWorkerAll()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	body, err := json.Marshal(&out)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
