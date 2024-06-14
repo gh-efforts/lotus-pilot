@@ -36,22 +36,22 @@ func (p *Pilot) addMinerHandle(w http.ResponseWriter, r *http.Request) {
 	var minerAPI MinerAPI
 	err := json.NewDecoder(r.Body).Decode(&minerAPI)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	maddr, err := address.NewFromString(minerAPI.Miner)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if p.hasMiner(maddr) {
-		http.Error(w, "miner already has", http.StatusBadRequest)
+		http.Error(w, "miner already has", http.StatusInternalServerError)
 		return
 	}
 
 	mi, err := toMinerInfo(p.ctx, minerAPI.Miner, minerAPI.API)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -74,12 +74,12 @@ func (p *Pilot) removeMinerHandle(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	maddr, err := address.NewFromString(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if !p.hasMiner(maddr) {
-		http.Error(w, "miner not found", http.StatusBadRequest)
+		http.Error(w, "miner not found", http.StatusInternalServerError)
 		return
 	}
 
@@ -113,12 +113,12 @@ func (p *Pilot) workerHandle(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	maddr, err := address.NewFromString(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if !p.hasMiner(maddr) {
-		http.Error(w, "miner not found", http.StatusBadRequest)
+		http.Error(w, "miner not found", http.StatusInternalServerError)
 		return
 	}
 
@@ -154,13 +154,13 @@ func (p *Pilot) switchHandle(w http.ResponseWriter, r *http.Request) {
 	var req SwitchRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	ss, err := p.newSwitch(req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -176,7 +176,7 @@ func (p *Pilot) getSwitchHandle(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	uid, err := uuid.Parse(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -192,7 +192,7 @@ func (p *Pilot) cancelSwitchHandle(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	uid, err := uuid.Parse(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -207,7 +207,7 @@ func (p *Pilot) removeSwitchHandle(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	uid, err := uuid.Parse(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -242,13 +242,13 @@ func (p *Pilot) resumeSwitchHandle(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	uid, err := uuid.Parse(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	err = p.resumeSwitch(uid)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
