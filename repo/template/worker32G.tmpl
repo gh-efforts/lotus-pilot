@@ -11,8 +11,8 @@ log_dir=$base_dir/log
 tmp_dir=$base_dir/tmp
 
 mkdir -p $repo_dir $log_dir $tmp_dir
-sync && echo 3 > /proc/sys/vm/drop_caches
-sysctl -w vm.nr_hugepages=851968
+#sync && echo 3 > /proc/sys/vm/drop_caches
+#sysctl -w vm.nr_hugepages=851968
 # miner 的api信息，参考miner部署环节
 export MINER_API_INFO={{.MinerAPIInfo}}
 
@@ -89,6 +89,7 @@ export P2_SEPARATE_LOG_PATH=$log_dir
 export UNSEALED_SECTOR_PATH=/media/nvme/s-t01000-0
 export ENABLE_IOURING=1
 export VERIFY_SYNTH_PROOFS_COUNT=3000
+export DISABLE_HUGEPAGES=1
 
 # 开启SynthPoRep
 export LOTUS_SEALING_USESYNTHETICPOREP=true
