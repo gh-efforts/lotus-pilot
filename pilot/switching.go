@@ -51,6 +51,7 @@ type SwitchState struct {
 
 func (s *SwitchState) update(m *Pilot) {
 	var wg sync.WaitGroup
+	throttle := make(chan struct{}, m.parallel)
 
 	for wid, ws := range s.Worker {
 		//skip complete or error
@@ -59,8 +60,12 @@ func (s *SwitchState) update(m *Pilot) {
 		}
 
 		wg.Add(1)
+		throttle <- struct{}{}
 		go func(wid uuid.UUID, ws *WorkerState) {
 			defer wg.Done()
+			defer func() {
+				<-throttle
+			}()
 			//for{}
 			switch ws.State {
 			case StateWorkerPicked:

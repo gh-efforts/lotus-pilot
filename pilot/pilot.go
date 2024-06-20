@@ -36,6 +36,8 @@ type Pilot struct {
 
 	scLk       sync.Mutex
 	statsCache map[address.Address]workerStatsCache
+
+	parallel int
 }
 
 func NewPilot(ctx context.Context, r *repo.Repo) (*Pilot, error) {
@@ -78,6 +80,7 @@ func NewPilot(ctx context.Context, r *repo.Repo) (*Pilot, error) {
 		repo:         r,
 		infoCache:    make(map[address.Address]workerInfoCache),
 		statsCache:   make(map[address.Address]workerStatsCache),
+		parallel:     conf.Parallel,
 	}
 	p.run()
 	return p, nil

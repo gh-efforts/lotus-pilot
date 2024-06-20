@@ -44,6 +44,7 @@ func (a *APIInfo) ToAPIInfo() string {
 type Config struct {
 	Interval     Duration           `json:"interval"`
 	CacheTimeout Duration           `json:"cacheTimeout"`
+	Parallel     int                `json:"parallel"`
 	Miners       map[string]APIInfo `json:"miners"`
 }
 
@@ -79,6 +80,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		Interval:     Duration(time.Minute),
 		CacheTimeout: Duration(time.Second * 30),
+		Parallel:     10,
 		Miners:       miners,
 	}
 }
