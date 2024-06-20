@@ -95,14 +95,22 @@ type WorkerState struct {
 	State    StateWorker `json:"state"`
 	ErrMsg   string      `json:"errMsg"`
 	Try      int         `json:"try"`
+	Resume   StateWorker `json:"resume"`
 }
 
 func (w *WorkerState) updateErr(errMsg string) {
 	w.Try += 1
 	w.ErrMsg = errMsg
 	if w.Try > ErrTryCount {
+		w.Resume = w.State
 		w.State = StateWorkerError
 	}
+}
+
+func (w *WorkerState) resume() {
+	w.Try = 0
+	w.ErrMsg = ""
+	w.State = w.Resume
 }
 
 func (w *WorkerInfo) sum(tt string) int {

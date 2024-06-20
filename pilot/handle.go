@@ -246,9 +246,16 @@ func (p *Pilot) resumeSwitchHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = p.resumeSwitch(uid)
+	ss, err := p.resumeSwitch(uid)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	body, err := json.Marshal(ss)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(body)
 }

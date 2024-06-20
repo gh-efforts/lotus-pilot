@@ -256,6 +256,14 @@ var switchResumeCmd = &cli.Command{
 			}
 			return fmt.Errorf("status: %s msg: %s", resp.Status, string(r))
 		}
+
+		var ss pilot.SwitchState
+		err = json.NewDecoder(resp.Body).Decode(&ss)
+		if err != nil {
+			return err
+		}
+
+		printSwitchState(ss)
 		return nil
 	},
 }

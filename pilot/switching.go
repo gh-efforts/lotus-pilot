@@ -358,20 +358,30 @@ func (p *Pilot) switchingWorkers() map[uuid.UUID]struct{} {
 	return out
 }
 
-func (p *Pilot) resumeSwitch(id uuid.UUID) error {
+func (p *Pilot) resumeSwitch(id uuid.UUID) (*SwitchState, error) {
 	p.swLk.Lock()
 	defer p.swLk.Unlock()
 
 	ss, ok := p.switchs[id]
 	if !ok {
-		return fmt.Errorf("switchID: %s not found", id)
+		return nil, fmt.Errorf("switchID: %s not found", id)
 	}
 	if ss.State == StateSwitching || ss.State == StateComplete {
-		return fmt.Errorf("switch state: %s can not resume", ss.State)
+		return nil, fmt.Errorf("switch state: %s can not resume", ss.State)
 	}
 
 	ss.State = StateSwitching
 	log.Infof("switch: %s resumed", ss.ID)
 
-	return p.writeSwitch()
+	for _, w := range ss.Worker {
+		if w.State == StateWorkerError {
+			w.resume()
+		}
+	}
+
+	err := p.writeSwitch()
+	if err != nil {
+		return nil, err
+	}
+	return ss, nil
 }
