@@ -119,17 +119,15 @@ func (s *SwitchState) update(m *Pilot) {
 					log.Debugw("Switching conditions not met", "switchID", s.ID, "workerID", ws.WorkerID)
 					return
 				}
-				//32G 切换到 64G miner 时需要设置巨页，启动脚本耗时3分钟
-				go func() {
-					err := workerRunCmd(m.ctx, w.Hostname, s.Req.To.String(), m.repo.ScriptsPath())
-					if err != nil {
-						log.Errorw("workerRunCmd", "switchID", s.ID, "wid", wid, "to", s.Req.To, "err", err.Error())
-						//ws.updateErr(err.Error())
-						//return
-					}
-				}()
 
-				log.Debugw("workerRunCmd background", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname, "to", s.Req.To)
+				err = workerRunCmd(m.ctx, w.Hostname, s.Req.To.String(), m.repo.ScriptsPath())
+				if err != nil {
+					log.Errorw("workerRunCmd", "switchID", s.ID, "wid", wid, "to", s.Req.To, "err", err.Error())
+					ws.updateErr(err.Error())
+					return
+				}
+
+				log.Debugw("workerRunCmd sunccess", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname, "to", s.Req.To)
 				ws.State = StateWorkerSwitchConfirming
 			case StateWorkerSwitchConfirming:
 				worker, err := m.getWorkerStats(s.Req.To)
