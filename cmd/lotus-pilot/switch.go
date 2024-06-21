@@ -280,12 +280,14 @@ func printSwitchState(ss pilot.SwitchState) {
 		fmt.Printf("workerID: %s\n", w.WorkerID)
 		fmt.Printf("hostname: %s\n", w.Hostname)
 		fmt.Printf("state: %s\n", w.State)
+		if w.State != pilot.StateWorkerPicked {
+			fmt.Printf("resume: %s\n", w.Resume)
+		}
 		if w.ErrMsg != "" {
 			fmt.Printf("errMsg: %s\n", w.ErrMsg)
 		}
 		if w.Try != 0 {
 			fmt.Printf("try: %d\n\n", w.Try)
 		}
-		fmt.Printf("resume: %s\n", w.Resume)
 	}
 }

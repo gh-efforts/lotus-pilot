@@ -66,7 +66,6 @@ func (s *SwitchState) update(m *Pilot) {
 			defer func() {
 				<-throttle
 			}()
-			//for{}
 			switch ws.State {
 			case StateWorkerPicked:
 				if s.Req.DisableAP {
@@ -132,7 +131,7 @@ func (s *SwitchState) update(m *Pilot) {
 					return
 				}
 
-				log.Debugw("workerRunCmd sunccess", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname, "to", s.Req.To)
+				log.Debugw("workerRunCmd", "switchID", s.ID, "workerID", ws.WorkerID, "hostname", ws.Hostname, "to", s.Req.To)
 				ws.State = StateWorkerSwitchConfirming
 			case StateWorkerSwitchConfirming:
 				worker, err := m.getWorkerStats(s.Req.To)
