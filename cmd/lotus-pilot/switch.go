@@ -286,5 +286,6 @@ func printSwitchState(ss pilot.SwitchState) {
 		if w.Try != 0 {
 			fmt.Printf("try: %d\n\n", w.Try)
 		}
+		fmt.Printf("resume: %s\n", w.Resume)
 	}
 }

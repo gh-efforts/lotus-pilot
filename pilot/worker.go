@@ -110,7 +110,12 @@ func (w *WorkerState) updateErr(errMsg string) {
 func (w *WorkerState) resume() {
 	w.Try = 0
 	w.ErrMsg = ""
-	w.State = w.Resume
+	//恢复到上一个状态
+	if w.Resume == StateWorkerDisableAPConfirming || w.Resume == StateWorkerSwitchConfirming || w.Resume == StateWorkerStopConfirming {
+		w.State = w.Resume - 1
+	} else {
+		w.State = w.Resume
+	}
 }
 
 func (w *WorkerInfo) sum(tt string) int {
