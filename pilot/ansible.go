@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/apenella/go-ansible/pkg/adhoc"
 	"github.com/gh-efforts/lotus-pilot/build"
 )
 
-//TODO: 执行ansible命令设置超时时间，防止worker网络问题一直卡那
+const RunCmdTimeout = time.Second * 30
 
 func disableAPCmd(ctx context.Context, hostname, miner string) error {
 	if build.SkipAnsible {
@@ -30,7 +31,9 @@ func disableAPCmd(ctx context.Context, hostname, miner string) error {
 
 	log.Debugw("disableAPCmd", "Command: ", adhoc.String())
 
-	err := adhoc.Run(ctx)
+	tctx, cancel := context.WithTimeout(ctx, RunCmdTimeout)
+	defer cancel()
+	err := adhoc.Run(tctx)
 	if err != nil {
 		return err
 	}
@@ -63,7 +66,9 @@ func copyScriptCmd(ctx context.Context, hostname, to, scriptsPath string) error 
 
 	log.Debugw("copyScriptCmd", "Command: ", adhoc.String())
 
-	err := adhoc.Run(ctx)
+	tctx, cancel := context.WithTimeout(ctx, RunCmdTimeout)
+	defer cancel()
+	err := adhoc.Run(tctx)
 	if err != nil {
 		return err
 	}
@@ -94,7 +99,9 @@ func workerRunCmd(ctx context.Context, hostname, to, scriptsPath string) error {
 
 	log.Debugw("workerRunCmd", "Command: ", adhoc.String())
 
-	err = adhoc.Run(ctx)
+	tctx, cancel := context.WithTimeout(ctx, RunCmdTimeout)
+	defer cancel()
+	err = adhoc.Run(tctx)
 	if err != nil {
 		return err
 	}
@@ -124,7 +131,9 @@ func workerStopCmd(ctx context.Context, hostname, from string) error {
 
 	log.Debugw("workerStopCmd", "Command: ", adhoc.String())
 
-	err := adhoc.Run(ctx)
+	tctx, cancel := context.WithTimeout(ctx, RunCmdTimeout)
+	defer cancel()
+	err := adhoc.Run(tctx)
 	if err != nil {
 		return err
 	}
