@@ -123,11 +123,11 @@ var runCmd = &cli.Command{
 
 		r, err := repo.New(cctx.String("repo"))
 		if err != nil {
-			return nil
+			return err
 		}
 		r.Init()
 		if err != nil {
-			return nil
+			return err
 		}
 
 		p, err := pilot.NewPilot(ctx, r)
